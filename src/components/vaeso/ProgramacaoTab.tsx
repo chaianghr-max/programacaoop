@@ -25,7 +25,12 @@ import {
   type LinhaSku,
 } from "@/lib/vaeso/calc";
 import { extrairTextoPdf, parsePedidoLinhas, vincularItens } from "@/lib/vaeso/pdf";
-import { EMPRESAS_TINY, listarOrdensTiny, type OrdemTiny } from "@/lib/vaeso/tiny.functions";
+import {
+  EMPRESAS_TINY,
+  listarOrdensTiny,
+  urlAutorizacaoTiny,
+  type OrdemTiny,
+} from "@/lib/vaeso/tiny.functions";
 
 type Ordenacao = { campo: string; asc: boolean };
 
