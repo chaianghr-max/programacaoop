@@ -425,10 +425,11 @@ export function ProgramacaoTab({
         </Button>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-border bg-card">
+      <div className="max-h-[70vh] overflow-auto rounded-lg border border-border bg-card">
         {estrutura ? (
           <table className="w-full text-xs">
-            <thead className="bg-grid-head text-grid-head-foreground">
+            <thead className="sticky top-0 z-10 bg-grid-head text-grid-head-foreground shadow-[0_1px_0_var(--color-border)]">
+
               <tr>
                 {[
                   "Item",
