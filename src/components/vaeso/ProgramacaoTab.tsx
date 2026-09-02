@@ -127,15 +127,6 @@ export function ProgramacaoTab({
     });
   }, [linhas, dados.mpItens]);
 
-  const itensSemSku = useMemo(() => {
-    const cadastrados = new Set(dados.skus.map((s) => s.sku.trim().toUpperCase()));
-    const out: { pedido: string; nome: string; sku: string | null; qtde: number }[] = [];
-    for (const p of dados.pedidos)
-      for (const item of p.itens ?? [])
-        if (!item.sku || !cadastrados.has(item.sku.trim().toUpperCase()))
-          out.push({ pedido: p.numero ?? `slot ${p.slot + 1}`, nome: item.nome, sku: item.sku, qtde: item.qtde });
-    return out;
-  }, [dados.pedidos, dados.skus]);
 
   async function importarPdf(slot: number, file: File) {
     try {
