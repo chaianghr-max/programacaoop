@@ -47,13 +47,19 @@ export function ProgramacaoTab({
   const [busca, setBusca] = useState("");
   const [ordem, setOrdem] = useState<Ordenacao>({ campo: "sku", asc: true });
   const [detalhe, setDetalhe] = useState<LinhaSku | null>(null);
-  const [colando, setColando] = useState<number | null>(null);
+  const [colando, setColando] = useState(false);
   const [textoColado, setTextoColado] = useState("");
-  const [ordemSelId, setOrdemSelId] = useState<string | null>(null);
+  const [empresaNova, setEmpresaNova] = useState<string>(EMPRESAS_TINY[0]);
+  const [numeroNovo, setNumeroNovo] = useState("");
+  const [selecionadas, setSelecionadas] = useState<string[]>([]);
 
   const qc = useQueryClient();
   const buscarOrdens = useServerFn(listarOrdensTiny);
   const obterUrlAuth = useServerFn(urlAutorizacaoTiny);
+
+  // Integração automática com o Tiny fica pronta, porém desligada até o app
+  // OAuth do Tiny existir (é necessário cadastrar a URL de retorno lá).
+  const TINY_ATIVO = false;
 
   async function conectarTiny() {
     const url = await obterUrlAuth({
@@ -61,14 +67,11 @@ export function ProgramacaoTab({
     });
     window.location.href = url;
   }
-  const {
-    data: ordensTiny,
-    isFetching: carregandoTiny,
-    error: erroTiny,
-  } = useQuery<OrdemTiny[]>({
+  const { data: ordensTiny } = useQuery<OrdemTiny[]>({
     queryKey: ["tiny-ordens"],
     queryFn: () => buscarOrdens(),
     staleTime: 60_000,
+    enabled: TINY_ATIVO,
   });
 
   const { data: entregas } = useQuery({
@@ -86,22 +89,80 @@ export function ProgramacaoTab({
     return m;
   }, [entregas]);
 
-  const ordemSel = (ordensTiny ?? []).find((o) => o.id === ordemSelId) ?? null;
+  type OrdemPainel = {
+    id: string;
+    numero: string;
+    empresa: string;
+    data: string;
+    slot: number | null;
+    itens: Array<{ codigo: string; quantidade: number }>;
+  };
 
-  const pctEntregue = (o: OrdemTiny) => {
+  const ordens: OrdemPainel[] = useMemo(() => {
+    const manuais: OrdemPainel[] = (dados.pedidos ?? []).map((p) => ({
+      id: `p${p.slot}`,
+      numero: p.numero ?? String(p.slot),
+      empresa: p.fornecedor ?? "",
+      data: p.data ?? "",
+      slot: p.slot,
+      itens: (p.itens ?? [])
+        .filter((i) => !!i.sku)
+        .map((i) => ({ codigo: String(i.sku), quantidade: Number(i.qtde || 0) })),
+    }));
+    const doTiny: OrdemPainel[] = (ordensTiny ?? []).map((o) => ({
+      id: o.id,
+      numero: o.numero,
+      empresa: o.empresa,
+      data: o.data,
+      slot: null,
+      itens: o.itens.map((i) => ({ codigo: i.codigo, quantidade: i.quantidade })),
+    }));
+    return [...manuais, ...doTiny].sort((a, b) => Number(b.numero) - Number(a.numero));
+  }, [dados.pedidos, ordensTiny]);
+
+  const ordensSel = useMemo(
+    () => ordens.filter((o) => selecionadas.includes(o.id)),
+    [ordens, selecionadas],
+  );
+  const temSelecao = ordensSel.length > 0;
+
+  const pctEntregue = (o: OrdemPainel) => {
     const total = o.itens.length;
     if (!total) return 0;
     const feitos = o.itens.filter((i) => entregueMap[`${o.id}|${i.codigo.toUpperCase()}`]).length;
     return (feitos / total) * 100;
   };
 
-  async function alternarEntrega(ordemId: string, sku: string, atual: boolean) {
-    if (atual) {
-      await supabase.from("ordens_entregas").delete().eq("ordem_id", ordemId).eq("sku", sku);
-    } else {
-      await supabase
-        .from("ordens_entregas")
-        .upsert({ ordem_id: ordemId, sku, entregue: true, updated_at: new Date().toISOString() });
+  function alternarOrdem(id: string) {
+    setSelecionadas((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
+  }
+
+  function alternarEmpresa(empresa: string) {
+    const ids = ordens.filter((o) => o.empresa === empresa).map((o) => o.id);
+    const todas = ids.length > 0 && ids.every((id) => selecionadas.includes(id));
+    setSelecionadas((s) => (todas ? s.filter((x) => !ids.includes(x)) : [...new Set([...s, ...ids])]));
+  }
+
+  async function excluirOrdem(o: OrdemPainel) {
+    if (o.slot === null) return;
+    setSelecionadas((s) => s.filter((x) => x !== o.id));
+    await supabase.from("pedidos_importados").delete().eq("slot", o.slot);
+    await supabase.from("ordens_entregas").delete().eq("ordem_id", o.id);
+    salvar(() => Promise.resolve({ error: null }) as never);
+    void qc.invalidateQueries({ queryKey: ["ordens-entregas"] });
+  }
+
+  async function alternarEntrega(sku: string, entregue: boolean) {
+    const chave = sku.trim().toUpperCase();
+    const alvo = ordensSel.filter((o) => o.itens.some((i) => i.codigo.trim().toUpperCase() === chave));
+    for (const o of alvo) {
+      if (entregue) {
+        await supabase.from("ordens_entregas").delete().eq("ordem_id", o.id).eq("sku", sku);
+      } else {
+        await supabase
+          .from("ordens_entregas")
+          .upsert({ ordem_id: o.id, sku, entregue: true, updated_at: new Date().toISOString() });
+      }
     }
     void qc.invalidateQueries({ queryKey: ["ordens-entregas"] });
   }
@@ -109,23 +170,17 @@ export function ProgramacaoTab({
   const qtdePorSku = useMemo(() => {
     if (modo === "manual") return dados.manual;
     const map: Record<string, number> = {};
-    if (ordemSel) {
-      for (const item of ordemSel.itens) {
+    const base = ordensSel.length > 0 ? ordensSel : [];
+    for (const o of base) {
+      for (const item of o.itens) {
         const k = item.codigo.trim().toUpperCase();
         if (!k) continue;
         map[k] = (map[k] ?? 0) + Number(item.quantidade || 0);
       }
-      return map;
-    }
-    for (const p of dados.pedidos) {
-      for (const item of p.itens ?? []) {
-        if (!item.sku) continue;
-        const k = item.sku.trim().toUpperCase();
-        map[k] = (map[k] ?? 0) + Number(item.qtde || 0);
-      }
     }
     return map;
-  }, [modo, dados.manual, dados.pedidos, ordemSel]);
+  }, [modo, dados.manual, ordensSel]);
+
 
 
   const linhas = useMemo(
