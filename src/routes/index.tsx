@@ -59,7 +59,7 @@ function Painel() {
   const logado = !!email;
   const { data: dados, isLoading, error } = useDados(logado);
   const salvarMut = useSalvar();
-  const salvar = (fn: () => Promise<unknown>) => salvarMut.mutate(fn);
+  const salvar = (fn: () => PromiseLike<unknown>) => salvarMut.mutate(fn);
 
   if (!pronto) return <div className="min-h-screen bg-muted" />;
   if (!logado) return <LoginCard />;
