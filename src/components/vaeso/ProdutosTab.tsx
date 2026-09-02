@@ -30,12 +30,31 @@ export function ProdutosTab({
     salvar(() => supabase.from("componentes").update({ [campo]: valor }).eq("id", id));
 
   async function enviarImagem(produtoId: string, file: File) {
-    const caminho = `${produtoId}/${Date.now()}-${file.name.replace(/[^\w.-]/g, "_")}`;
-    const { error } = await supabase.storage.from("produtos").upload(caminho, file, { upsert: true });
-    if (error) return;
-    const { data } = supabase.storage.from("produtos").getPublicUrl(caminho);
-    atualizarProduto(produtoId, "imagem", data.publicUrl);
+    // Imagem redimensionada e guardada direto no banco (miniatura leve).
+    const dataUrl = await new Promise<string | null>((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const img = new Image();
+        img.onload = () => {
+          const max = 400;
+          const escala = Math.min(1, max / Math.max(img.width, img.height));
+          const canvas = document.createElement("canvas");
+          canvas.width = Math.round(img.width * escala);
+          canvas.height = Math.round(img.height * escala);
+          const ctx = canvas.getContext("2d");
+          if (!ctx) return resolve(null);
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          resolve(canvas.toDataURL("image/jpeg", 0.8));
+        };
+        img.onerror = () => resolve(null);
+        img.src = String(reader.result);
+      };
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(file);
+    });
+    if (dataUrl) atualizarProduto(produtoId, "imagem", dataUrl);
   }
+
 
   return (
     <div className="space-y-4">
