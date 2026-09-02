@@ -78,7 +78,7 @@ export function ProdutosTab({ dados, salvar }: { dados: Dados; salvar: Salvar })
             <div key={p.id} className="overflow-hidden rounded-lg border border-border bg-card">
               <div className="flex flex-wrap items-center gap-3 border-b border-border px-3 py-2">
                 <button
-                  onClick={() => setFechados((s) => ({ ...s, [p.id]: aberto }))}
+                  onClick={() => setAbertos((s) => ({ ...s, [p.id]: !aberto }))}
                   className="text-muted-foreground"
                   aria-label={aberto ? "Recolher" : "Expandir"}
                 >
