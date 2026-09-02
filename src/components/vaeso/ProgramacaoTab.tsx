@@ -355,7 +355,7 @@ export function ProgramacaoTab({
             </thead>
             <tbody>
               {linhasEstrutura.map((l) => (
-                <tr key={l.key} className="border-t border-border odd:bg-muted/30 hover:bg-muted/40">
+                <tr key={l.key} className="border-t border-border even:bg-mp-cell hover:bg-muted/40">
                   <td className="whitespace-nowrap px-2 py-1 font-bold">{l.item}</td>
                   <td className="px-2 py-1">
                     {l.mp ? (
@@ -441,7 +441,7 @@ export function ProgramacaoTab({
             </thead>
             <tbody>
               {linhasVisiveis.map((l) => (
-                <tr key={l.sku.id} className="border-t border-border odd:bg-muted/30">
+                <tr key={l.sku.id} className="border-t border-border even:bg-mp-cell">
                   <td className="px-2 py-0.5">{l.produto?.tipo ?? "?"}</td>
                   <td className="px-2 py-0.5 font-medium">{l.sku.sku}</td>
                   <td className="px-2 py-0.5">{l.sku.descricao}</td>
