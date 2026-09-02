@@ -109,6 +109,27 @@ export type Database = {
         }
         Relationships: []
       }
+      ordens_entregas: {
+        Row: {
+          entregue: boolean
+          ordem_id: string
+          sku: string
+          updated_at: string
+        }
+        Insert: {
+          entregue?: boolean
+          ordem_id: string
+          sku: string
+          updated_at?: string
+        }
+        Update: {
+          entregue?: boolean
+          ordem_id?: string
+          sku?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       pedidos_importados: {
         Row: {
           data: string | null
