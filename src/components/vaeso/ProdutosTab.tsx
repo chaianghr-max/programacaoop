@@ -110,7 +110,7 @@ export function ProdutosTab({ dados, salvar }: { dados: Dados; salvar: Salvar })
                 <CellInput
                   value={p.nome}
                   onCommit={(v) => atualizarProduto(p.id, "nome", v)}
-                  className="min-w-[220px] rounded-md bg-primary/10 text-sm font-bold"
+                  className="w-64 shrink-0 rounded-md bg-primary/10 text-sm font-bold"
                 />
 
                 <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
