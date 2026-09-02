@@ -355,11 +355,11 @@ export function ProgramacaoTab({
             </thead>
             <tbody>
               {linhasEstrutura.map((l) => (
-                <tr key={l.key} className="border-t border-border hover:bg-muted/40">
+                <tr key={l.key} className="border-t border-border odd:bg-muted/30 hover:bg-muted/40">
                   <td className="whitespace-nowrap px-2 py-1 font-bold">{l.item}</td>
                   <td className="px-2 py-1">
                     {l.mp ? (
-                      <span className="rounded bg-accent px-1.5 py-0.5 text-[10px] font-bold uppercase text-accent-foreground">
+                      <span className="rounded bg-mp-head px-1.5 py-0.5 text-[10px] font-bold uppercase text-mp-head-foreground">
                         {l.mp}
                       </span>
                     ) : (
@@ -374,9 +374,9 @@ export function ProgramacaoTab({
                   >
                     {l.skus.join(", ")}
                   </td>
-                  <td className="px-2 py-1">{fmtInt(l.quantidade)}</td>
+                  <td className="px-2 py-1 font-bold">{fmtInt(l.quantidade)}</td>
                   <td className="px-2 py-1">{fmt(l.pesoG)}</td>
-                  <td className="px-2 py-1 font-bold">{fmt(l.kg)}</td>
+                  <td className="bg-mp-cell px-2 py-1 font-bold">{fmt(l.kg)}</td>
                   <td className="px-2 py-1">{fmt(l.cavidades, 0)}</td>
                   <td className="px-2 py-1">{fmt(l.cicloS, 0)}</td>
                   <td className="px-2 py-1">{fmt(l.ph, 0)}</td>
