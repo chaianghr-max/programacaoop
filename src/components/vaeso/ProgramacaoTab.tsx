@@ -117,6 +117,33 @@ export function ProgramacaoTab({
     return out.sort((a, b) => a.item.localeCompare(b.item));
   }, [linhas, dados.componentes, ocultarZerados, termo]);
 
+  const totaisVisiveis = useMemo(() => {
+    const mpKg: Record<string, number> = {};
+    for (const m of dados.mpItens) mpKg[m.id] = 0;
+    let quantidade = 0;
+    let horas = 0;
+    for (const l of linhasVisiveis) {
+      quantidade += l.quantidade;
+      horas += l.horas ?? 0;
+      for (const m of dados.mpItens) {
+        mpKg[m.id] = (mpKg[m.id] ?? 0) + (l.kgPorMp[m.descricao.trim().toUpperCase()] ?? 0);
+      }
+    }
+    return { quantidade, horas, mpKg };
+  }, [linhasVisiveis, dados.mpItens]);
+
+  const totaisEstrutura = useMemo(() => {
+    let quantidade = 0;
+    let kg = 0;
+    let horas = 0;
+    for (const l of linhasEstrutura) {
+      quantidade += l.quantidade;
+      kg += l.kg ?? 0;
+      horas += l.horas ?? 0;
+    }
+    return { quantidade, kg, horas };
+  }, [linhasEstrutura]);
+
   const mpTotais = useMemo(() => {
     const base = linhas.filter((l) => l.quantidade > 0);
     return dados.mpItens.map((m) => {
