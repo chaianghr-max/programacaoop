@@ -25,7 +25,12 @@ import {
   type LinhaSku,
 } from "@/lib/vaeso/calc";
 import { extrairTextoPdf, parsePedidoLinhas, vincularItens } from "@/lib/vaeso/pdf";
-import { EMPRESAS_TINY, listarOrdensTiny, type OrdemTiny } from "@/lib/vaeso/tiny.functions";
+import {
+  EMPRESAS_TINY,
+  listarOrdensTiny,
+  urlAutorizacaoTiny,
+  type OrdemTiny,
+} from "@/lib/vaeso/tiny.functions";
 
 type Ordenacao = { campo: string; asc: boolean };
 
@@ -48,6 +53,14 @@ export function ProgramacaoTab({
 
   const qc = useQueryClient();
   const buscarOrdens = useServerFn(listarOrdensTiny);
+  const obterUrlAuth = useServerFn(urlAutorizacaoTiny);
+
+  async function conectarTiny() {
+    const url = await obterUrlAuth({
+      data: { redirectUri: `${window.location.origin}/tiny-callback` },
+    });
+    window.location.href = url;
+  }
   const {
     data: ordensTiny,
     isFetching: carregandoTiny,
@@ -325,7 +338,24 @@ export function ProgramacaoTab({
       </div>
 
       {erroTiny && (
-        <p className="text-xs text-destructive">Não foi possível carregar as ordens do Tiny.</p>
+        String(erroTiny).includes("TINY_NAO_AUTORIZADO") ? (
+          <div className="rounded-lg border border-dashed border-border bg-card p-4 text-sm">
+            <p className="font-semibold">Conecte sua conta do Tiny para buscar as ordens de compra em aberto.</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Você será redirecionado ao Tiny para autorizar o acesso (somente leitura).
+            </p>
+            <Button size="sm" className="mt-3" onClick={() => void conectarTiny()}>
+              Conectar Tiny
+            </Button>
+          </div>
+        ) : (
+          <p className="text-xs text-destructive">
+            Não foi possível carregar as ordens do Tiny.{" "}
+            <button className="underline" onClick={() => void conectarTiny()}>
+              Reconectar conta
+            </button>
+          </p>
+        )
       )}
       {carregandoTiny && !ordensTiny && (
         <p className="text-xs text-muted-foreground">Carregando ordens do Tiny...</p>
