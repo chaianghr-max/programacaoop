@@ -218,6 +218,16 @@ export function ProgramacaoTab({
     });
   }, [linhas, dados.mpItens]);
 
+  const mpTotalGeral = useMemo(
+    () => ({
+      kg: mpTotais.reduce((a, m) => a + m.kg, 0),
+      valor: mpTotais.reduce((a, m) => a + (m.valor ?? 0), 0),
+    }),
+    [mpTotais],
+  );
+
+
+
 
   async function importarPdf(slot: number, file: File) {
     try {
