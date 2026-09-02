@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CellInput } from "@/components/vaeso/CellInput";
 import { supabase } from "@/integrations/supabase/client";
-import { novoId, type Dados } from "@/lib/vaeso/api";
+import { novoId, type Dados, type Salvar } from "@/lib/vaeso/api";
 import { brl, consumoKg, fmt, num, pecasHora, resolveValorKg } from "@/lib/vaeso/calc";
 
 export function ProdutosTab({
@@ -13,7 +13,7 @@ export function ProdutosTab({
   salvar,
 }: {
   dados: Dados;
-  salvar: (fn: () => Promise<unknown>) => void;
+  salvar: Salvar;
 }) {
   const [busca, setBusca] = useState("");
   const [abertos, setAbertos] = useState<Record<string, boolean>>({});
@@ -24,10 +24,10 @@ export function ProdutosTab({
   );
 
   const atualizarProduto = (id: string, campo: string, valor: unknown) =>
-    salvar(() => supabase.from("produtos").update({ [campo]: valor }).eq("id", id));
+    salvar(() => supabase.from("produtos").update({ [campo]: valor } as never).eq("id", id));
 
   const atualizarComp = (id: string, campo: string, valor: unknown) =>
-    salvar(() => supabase.from("componentes").update({ [campo]: valor }).eq("id", id));
+    salvar(() => supabase.from("componentes").update({ [campo]: valor } as never).eq("id", id));
 
   async function enviarImagem(produtoId: string, file: File) {
     // Imagem redimensionada e guardada direto no banco (miniatura leve).

@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { CellInput } from "@/components/vaeso/CellInput";
 import { supabase } from "@/integrations/supabase/client";
-import type { Dados } from "@/lib/vaeso/api";
+import type { Dados, Salvar } from "@/lib/vaeso/api";
 import {
   brl,
   calcularLinhaSku,
@@ -30,7 +30,7 @@ export function ProgramacaoTab({
   salvar,
 }: {
   dados: Dados;
-  salvar: (fn: () => Promise<unknown>) => void;
+  salvar: Salvar;
 }) {
   const [modo, setModo] = useState<"ordem" | "manual">("ordem");
   const [estrutura, setEstrutura] = useState(false);

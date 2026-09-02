@@ -43,7 +43,7 @@ export function useDados(enabled: boolean) {
 export function useSalvar() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (fn: () => Promise<unknown>) => {
+    mutationFn: async (fn: () => PromiseLike<unknown>) => {
       const res = (await fn()) as { error?: { message: string } } | unknown;
       const erro = (res as { error?: { message: string } })?.error;
       if (erro) throw new Error(erro.message);
@@ -54,3 +54,5 @@ export function useSalvar() {
     },
   });
 }
+
+export type Salvar = (fn: () => PromiseLike<unknown>) => void;

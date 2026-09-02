@@ -5,10 +5,10 @@ import { CellInput } from "@/components/vaeso/CellInput";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
-import { novoId, type Dados } from "@/lib/vaeso/api";
+import { novoId, type Dados, type Salvar } from "@/lib/vaeso/api";
 import { num } from "@/lib/vaeso/calc";
 
-export function MpTab({ dados, salvar }: { dados: Dados; salvar: (fn: () => Promise<unknown>) => void }) {
+export function MpTab({ dados, salvar }: { dados: Dados; salvar: Salvar }) {
   const [busca, setBusca] = useState("");
   const termo = busca.trim().toLowerCase();
   const itens = dados.mpItens.filter(
@@ -19,7 +19,7 @@ export function MpTab({ dados, salvar }: { dados: Dados; salvar: (fn: () => Prom
   );
 
   const atualizar = (id: string, campo: string, valor: unknown) =>
-    salvar(() => supabase.from("mp_itens").update({ [campo]: valor }).eq("id", id));
+    salvar(() => supabase.from("mp_itens").update({ [campo]: valor } as never).eq("id", id));
 
   return (
     <div className="space-y-4">

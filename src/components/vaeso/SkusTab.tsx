@@ -5,14 +5,14 @@ import { CellInput } from "@/components/vaeso/CellInput";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
-import { novoId, type Dados } from "@/lib/vaeso/api";
+import { novoId, type Dados, type Salvar } from "@/lib/vaeso/api";
 
 export function SkusTab({
   dados,
   salvar,
 }: {
   dados: Dados;
-  salvar: (fn: () => Promise<unknown>) => void;
+  salvar: Salvar;
 }) {
   const [busca, setBusca] = useState("");
   const termo = busca.trim().toLowerCase();
@@ -25,7 +25,7 @@ export function SkusTab({
   );
 
   const atualizar = (id: string, campo: string, valor: string) =>
-    salvar(() => supabase.from("skus").update({ [campo]: valor }).eq("id", id));
+    salvar(() => supabase.from("skus").update({ [campo]: valor } as never).eq("id", id));
 
   return (
     <div className="space-y-4">
