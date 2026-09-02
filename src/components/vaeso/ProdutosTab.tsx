@@ -11,6 +11,7 @@ import { brl, consumoKg, fmt, num, pecasHora, resolveValorKg } from "@/lib/vaeso
 export function ProdutosTab({ dados, salvar }: { dados: Dados; salvar: Salvar }) {
   const [busca, setBusca] = useState("");
   const [abertos, setAbertos] = useState<Record<string, boolean>>({});
+  const [preview, setPreview] = useState<string | null>(null);
   const termo = busca.trim().toLowerCase();
 
   const produtos = dados.produtos.filter(
@@ -36,6 +37,8 @@ export function ProdutosTab({ dados, salvar }: { dados: Dados; salvar: Salvar })
           canvas.height = Math.round(img.height * escala);
           const ctx = canvas.getContext("2d");
           if (!ctx) return resolve(null);
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
           ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
           resolve(canvas.toDataURL("image/jpeg", 0.82));
         };
@@ -87,19 +90,13 @@ export function ProdutosTab({ dados, salvar }: { dados: Dados; salvar: Salvar })
 
                 <div className="group relative">
                   {p.imagem ? (
-                    <>
-                      <img
-                        src={p.imagem}
-                        alt={p.nome}
-                        className="size-11 rounded-md border border-border bg-background object-contain"
-                      />
-                      <img
-                        src={p.imagem}
-                        alt=""
-                        aria-hidden
-                        className="pointer-events-none absolute left-0 top-0 z-50 hidden size-64 rounded-lg border border-border bg-card object-contain p-2 shadow-xl group-hover:block"
-                      />
-                    </>
+                    <img
+                      src={p.imagem}
+                      alt={p.nome}
+                      onMouseEnter={() => setPreview(p.imagem)}
+                      onMouseLeave={() => setPreview(null)}
+                      className="size-11 cursor-zoom-in rounded-md border border-border bg-white object-contain"
+                    />
                   ) : (
                     <div className="flex size-11 items-center justify-center rounded-md border border-dashed border-border text-[10px] text-muted-foreground">
                       sem foto
