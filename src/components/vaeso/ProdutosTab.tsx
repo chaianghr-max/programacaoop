@@ -393,6 +393,18 @@ export function ProdutosTab({ dados, salvar }: { dados: Dados; salvar: Salvar })
           );
         })}
       </div>
+
+      {preview && (
+        <div className="pointer-events-none fixed inset-0 z-[100] flex items-center justify-center p-8">
+          <div className="rounded-xl border border-border bg-white p-4 shadow-2xl">
+            <img
+              src={preview}
+              alt="Ampliação do produto"
+              className="max-h-[70vh] max-w-[70vw] object-contain"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
