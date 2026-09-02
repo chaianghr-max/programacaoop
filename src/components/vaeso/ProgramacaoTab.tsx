@@ -670,6 +670,14 @@ export function ProgramacaoTab({
                 </tr>
               ))}
             </tbody>
+            <tfoot>
+              <tr className="border-t-2 border-border bg-secondary font-bold text-secondary-foreground">
+                <td className="px-2 py-1.5 uppercase">Total geral</td>
+                <td className="px-2 py-1.5 text-right">{fmt(mpTotalGeral.kg)}</td>
+                <td className="px-2 py-1.5 text-right">{brl(mpTotalGeral.valor)}</td>
+              </tr>
+            </tfoot>
+
           </table>
         </div>
 
