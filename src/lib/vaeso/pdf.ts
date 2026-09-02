@@ -113,10 +113,10 @@ export async function extrairTextoPdf(file: File): Promise<string[]> {
     const porY = new Map<number, { x: number; str: string }[]>();
     for (const item of content.items as Array<{ str: string; transform: number[] }>) {
       if (!item.str?.trim()) continue;
-      const y = Math.round(item.transform[5]);
-      const chave = [...porY.keys()].find((k) => Math.abs(k - y) <= 2) ?? y;
+      const y = Math.round(item.transform[5] ?? 0);
+      const chave: number = [...porY.keys()].find((k) => Math.abs(k - y) <= 2) ?? y;
       const arr = porY.get(chave) ?? [];
-      arr.push({ x: item.transform[4], str: item.str });
+      arr.push({ x: item.transform[4] ?? 0, str: item.str });
       porY.set(chave, arr);
     }
     const ys = [...porY.keys()].sort((a, b) => b - a);
