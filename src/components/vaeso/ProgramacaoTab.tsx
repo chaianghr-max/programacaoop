@@ -393,6 +393,21 @@ export function ProgramacaoTab({
                 </tr>
               )}
             </tbody>
+            {linhasEstrutura.length > 0 && (
+              <tfoot>
+                <tr className="border-t-2 border-border bg-secondary font-bold text-secondary-foreground">
+                  <td className="whitespace-nowrap px-2 py-1.5 uppercase" colSpan={5}>
+                    Total ({linhasEstrutura.length} itens)
+                  </td>
+                  <td className="px-2 py-1.5">{fmtInt(totaisEstrutura.quantidade)}</td>
+                  <td className="px-2 py-1.5" />
+                  <td className="bg-mp-cell px-2 py-1.5">{fmt(totaisEstrutura.kg)}</td>
+                  <td className="px-2 py-1.5" colSpan={3} />
+                  <td className="whitespace-nowrap px-2 py-1.5">{fmt(totaisEstrutura.horas, 1)} h</td>
+                </tr>
+              </tfoot>
+            )}
+            </tbody>
           </table>
         ) : (
           <table className="w-full text-xs">
