@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { z } from "zod";
 
 export const EMPRESAS_TINY = [
   "PLASTSERV INDUSTRIA DE PLASTICOS LTDA EPP",
@@ -21,54 +22,113 @@ export type OrdemTiny = {
   itens: OrdemTinyItem[];
 };
 
-const SITUACOES_FECHADAS = ["cancelado", "entregue", "nao entregue", "não entregue"];
-
-async function tiny(endpoint: string, params: Record<string, string>) {
-  const token = process.env["TINY_API_TOKEN"];
-  if (!token) throw new Error("TINY_API_TOKEN ausente");
-  const body = new URLSearchParams({ token, formato: "json", ...params });
-  const res = await fetch(`https://api.tiny.com.br/api2/${endpoint}`, {
-    method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded" },
-    body,
-  });
-  const json = (await res.json()) as { retorno?: Record<string, unknown> };
-  return json.retorno ?? {};
+function normalizar(s: string) {
+  return s
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, " ");
 }
+
+const EMPRESAS_NORM = new Map(EMPRESAS_TINY.map((e) => [normalizar(e), e]));
+
+type OcResumo = {
+  id?: number | string;
+  numero?: number | string;
+  numeroPedido?: number | string;
+  data?: string;
+  dataPedido?: string;
+  situacao?: number | string;
+  fornecedor?: { nome?: string; razaoSocial?: string };
+};
+
+type OcDetalhe = OcResumo & {
+  itens?: Array<{
+    produto?: { codigo?: string; descricao?: string; nome?: string };
+    quantidade?: number;
+    preco?: number;
+  }>;
+};
+
+export const statusTiny = createServerFn({ method: "GET" }).handler(
+  async (): Promise<{ conectado: boolean }> => {
+    const { lerTokens } = await import("./tiny-v3.server");
+    return { conectado: (await lerTokens()) !== null };
+  },
+);
+
+export const urlAutorizacaoTiny = createServerFn({ method: "GET" })
+  .inputValidator((data) => z.object({ redirectUri: z.string().url() }).parse(data))
+  .handler(async ({ data }): Promise<string> => {
+    const clientId = process.env["TINY_CLIENT_ID"];
+    if (!clientId) throw new Error("TINY_CLIENT_ID ausente");
+    const q = new URLSearchParams({
+      client_id: clientId,
+      redirect_uri: data.redirectUri,
+      scope: "openid",
+      response_type: "code",
+    });
+    return `https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/auth?${q}`;
+  });
+
+export const trocarCodigoTiny = createServerFn({ method: "POST" })
+  .inputValidator((data) =>
+    z.object({ code: z.string(), redirectUri: z.string().url() }).parse(data),
+  )
+  .handler(async ({ data }) => {
+    const { trocarCodigo } = await import("./tiny-v3.server");
+    await trocarCodigo(data.code, data.redirectUri);
+    return { ok: true };
+  });
+
+export const desconectarTiny = createServerFn({ method: "POST" }).handler(async () => {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  await supabaseAdmin.from("app_prefs").delete().eq("chave", "tiny_oauth");
+  return { ok: true };
+});
 
 export const listarOrdensTiny = createServerFn({ method: "GET" }).handler(
   async (): Promise<OrdemTiny[]> => {
-    const ordens: OrdemTiny[] = [];
+    const { tinyV3 } = await import("./tiny-v3.server");
 
-    for (const empresa of EMPRESAS_TINY) {
-      const retorno = (await tiny("pedidos.pesquisa.php", { cliente: empresa })) as {
-        pedidos?: Array<{ pedido: Record<string, string> }>;
-      };
-      for (const p of retorno.pedidos ?? []) {
-        const ped = p.pedido;
-        const nome = (ped["nome"] ?? "").trim().toUpperCase();
-        if (nome !== empresa.toUpperCase()) continue;
-        const situacao = ped["situacao"] ?? "";
-        if (SITUACOES_FECHADAS.includes(situacao.toLowerCase())) continue;
-        ordens.push({
-          id: String(ped["id"]),
-          numero: String(ped["numero"] ?? ""),
-          empresa,
-          data: ped["data_pedido"] ?? "",
-          situacao,
-          itens: [],
-        });
-      }
+    const resumos: OcResumo[] = [];
+    let offset = 0;
+    const limit = 100;
+    for (;;) {
+      const pagina = await tinyV3<{
+        itens?: OcResumo[];
+        paginacao?: { total?: number; limit?: number; offset?: number };
+      }>(`/ordem-compra?situacao=0&orderBy=numero&limit=${limit}&offset=${offset}`);
+      const itens = pagina.itens ?? [];
+      resumos.push(...itens);
+      const total = pagina.paginacao?.total ?? resumos.length;
+      offset += itens.length;
+      if (itens.length < limit || offset >= total) break;
+    }
+
+    const ordens: OrdemTiny[] = [];
+    for (const r of resumos) {
+      const nomeFornecedor = r.fornecedor?.nome ?? r.fornecedor?.razaoSocial ?? "";
+      const empresa = EMPRESAS_NORM.get(normalizar(nomeFornecedor));
+      if (!empresa) continue;
+      ordens.push({
+        id: String(r.id ?? ""),
+        numero: String(r.numero ?? r.numeroPedido ?? ""),
+        empresa,
+        data: r.data ?? r.dataPedido ?? "",
+        situacao: String(r.situacao ?? ""),
+        itens: [],
+      });
     }
 
     for (const ordem of ordens) {
-      const retorno = (await tiny("pedido.obter.php", { id: ordem.id })) as {
-        pedido?: { itens?: Array<{ item: Record<string, string> }> };
-      };
-      ordem.itens = (retorno.pedido?.itens ?? []).map((i) => ({
-        codigo: (i.item["codigo"] ?? "").trim(),
-        descricao: i.item["descricao"] ?? "",
-        quantidade: Number(i.item["quantidade"] ?? 0),
+      if (!ordem.id) continue;
+      const det = await tinyV3<OcDetalhe>(`/ordem-compra/${ordem.id}`);
+      ordem.itens = (det.itens ?? []).map((i) => ({
+        codigo: (i.produto?.codigo ?? "").trim(),
+        descricao: i.produto?.descricao ?? i.produto?.nome ?? "",
+        quantidade: Number(i.quantidade ?? 0),
       }));
     }
 
