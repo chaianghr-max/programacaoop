@@ -262,7 +262,7 @@ export function ProgramacaoTab({
         </div>
       </div>
 
-      <SecaoTitulo>Produtos por SKU</SecaoTitulo>
+      <SecaoTitulo>{estrutura ? "Estrutura de itens" : "Produtos por SKU"}</SecaoTitulo>
 
       <div className="flex flex-wrap items-center gap-2">
         <div className="inline-flex overflow-hidden rounded-md border border-border">
