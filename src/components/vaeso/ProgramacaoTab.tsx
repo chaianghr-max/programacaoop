@@ -371,9 +371,26 @@ export function ProgramacaoTab({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-2">
-        <SecaoTitulo>Ordens de compra em aberto (Tiny)</SecaoTitulo>
-        <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <SecaoTitulo>Ordens de compra em aberto</SecaoTitulo>
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            value={empresaNova}
+            onChange={(e) => setEmpresaNova(e.target.value)}
+            className="rounded-md border border-input bg-background px-2 py-1 text-[11px]"
+          >
+            {EMPRESAS_TINY.map((e) => (
+              <option key={e} value={e}>
+                {e}
+              </option>
+            ))}
+          </select>
+          <Input
+            value={numeroNovo}
+            onChange={(e) => setNumeroNovo(e.target.value)}
+            placeholder="Nº da ordem"
+            className="h-7 w-28 text-[11px]"
+          />
           <label className="cursor-pointer rounded-md border border-border px-2 py-1 text-[11px] hover:bg-accent">
             importar PDF
             <input
@@ -382,54 +399,50 @@ export function ProgramacaoTab({
               className="hidden"
               onChange={(e) => {
                 const f = e.target.files?.[0];
-                if (f) void importarPdf(0, f);
+                if (f) void importarPdf(f);
+                e.target.value = "";
               }}
             />
           </label>
-          <button className="text-[11px] text-primary underline" onClick={() => setColando(0)}>
+          <button className="text-[11px] text-primary underline" onClick={() => setColando(true)}>
             colar texto
           </button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => void qc.invalidateQueries({ queryKey: ["tiny-ordens"] })}
-          >
-            <RefreshCw className={`mr-1 size-4 ${carregandoTiny ? "animate-spin" : ""}`} /> Atualizar
-          </Button>
+          {TINY_ATIVO && (
+            <Button variant="outline" size="sm" onClick={() => void conectarTiny()}>
+              <RefreshCw className="mr-1 size-4" /> Conectar Tiny
+            </Button>
+          )}
+          {selecionadas.length > 0 && (
+            <button
+              className="text-[11px] text-muted-foreground underline"
+              onClick={() => setSelecionadas([])}
+            >
+              limpar seleção
+            </button>
+          )}
         </div>
       </div>
 
-      {erroTiny && (
-        String(erroTiny).includes("TINY_NAO_AUTORIZADO") ? (
-          <div className="rounded-lg border border-dashed border-border bg-card p-4 text-sm">
-            <p className="font-semibold">Conecte sua conta do Tiny para buscar as ordens de compra em aberto.</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Você será redirecionado ao Tiny para autorizar o acesso (somente leitura).
-            </p>
-            <Button size="sm" className="mt-3" onClick={() => void conectarTiny()}>
-              Conectar Tiny
-            </Button>
-          </div>
-        ) : (
-          <p className="text-xs text-destructive">
-            Não foi possível carregar as ordens do Tiny.{" "}
-            <button className="underline" onClick={() => void conectarTiny()}>
-              Reconectar conta
-            </button>
-          </p>
-        )
-      )}
-      {carregandoTiny && !ordensTiny && (
-        <p className="text-xs text-muted-foreground">Carregando ordens do Tiny...</p>
-      )}
-
       <div className="grid gap-3 md:grid-cols-3">
         {EMPRESAS_TINY.map((empresa) => {
-          const lista = (ordensTiny ?? []).filter((o) => o.empresa === empresa);
+          const lista = ordens.filter((o) => o.empresa === empresa);
+          const todas = lista.length > 0 && lista.every((o) => selecionadas.includes(o.id));
           return (
             <div key={empresa} className="rounded-lg border border-border bg-card p-2">
-              <div className="mb-2 truncate text-[11px] font-bold uppercase tracking-wide text-primary" title={empresa}>
-                {empresa}
+              <div className="mb-2 flex items-start justify-between gap-2">
+                <div
+                  className="truncate text-[11px] font-bold uppercase tracking-wide text-primary"
+                  title={empresa}
+                >
+                  {empresa}
+                </div>
+                <button
+                  disabled={lista.length === 0}
+                  onClick={() => alternarEmpresa(empresa)}
+                  className="shrink-0 rounded border border-border px-1.5 py-0.5 text-[10px] font-semibold uppercase hover:bg-accent disabled:opacity-40"
+                >
+                  {todas ? "limpar todas" : "selecionar todas"}
+                </button>
               </div>
               {lista.length === 0 ? (
                 <div className="px-1 py-2 text-[11px] text-muted-foreground">Sem ordens em aberto.</div>
@@ -437,29 +450,42 @@ export function ProgramacaoTab({
                 <div className="flex flex-wrap gap-2">
                   {lista.map((o) => {
                     const pct = pctEntregue(o);
-                    const sel = ordemSelId === o.id;
+                    const sel = selecionadas.includes(o.id);
                     return (
-                      <button
+                      <div
                         key={o.id}
-                        onClick={() => setOrdemSelId(sel ? null : o.id)}
-                        className={`min-w-[104px] rounded-md border px-2 py-1 text-left transition-colors ${
+                        className={`relative min-w-[112px] rounded-md border transition-colors ${
                           sel
                             ? "border-primary bg-primary text-primary-foreground"
                             : "border-border bg-background hover:bg-accent"
                         }`}
                       >
-                        <div className="text-sm font-bold leading-tight">Nº {o.numero}</div>
-                        <div className="text-[10px] opacity-80">
-                          {o.data} · {o.itens.length} itens
-                        </div>
-                        <div className="mt-1 h-1.5 w-full overflow-hidden rounded bg-muted">
-                          <div
-                            className={`h-full ${sel ? "bg-primary-foreground" : "bg-primary"}`}
-                            style={{ width: `${pct}%` }}
-                          />
-                        </div>
-                        <div className="text-[10px] font-semibold">{fmt(pct, 0)}% entregue</div>
-                      </button>
+                        <button
+                          onClick={() => alternarOrdem(o.id)}
+                          className="block w-full px-2 py-1 text-left"
+                        >
+                          <div className="text-sm font-bold leading-tight">Nº {o.numero}</div>
+                          <div className="text-[10px] opacity-80">
+                            {o.data} · {o.itens.length} itens
+                          </div>
+                          <div className="mt-1 h-1.5 w-full overflow-hidden rounded bg-muted">
+                            <div
+                              className={`h-full ${sel ? "bg-primary-foreground" : "bg-primary"}`}
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
+                          <div className="text-[10px] font-semibold">{fmt(pct, 0)}% entregue</div>
+                        </button>
+                        {o.slot !== null && (
+                          <button
+                            title="excluir ordem"
+                            onClick={() => excluirOrdem(o)}
+                            className="absolute right-0.5 top-0.5 rounded px-1 text-[10px] font-bold opacity-60 hover:opacity-100"
+                          >
+                            ×
+                          </button>
+                        )}
+                      </div>
                     );
                   })}
                 </div>
@@ -468,6 +494,7 @@ export function ProgramacaoTab({
           );
         })}
       </div>
+
 
 
       <div className="flex flex-wrap items-center gap-3">
