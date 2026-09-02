@@ -47,13 +47,19 @@ export function ProgramacaoTab({
   const [busca, setBusca] = useState("");
   const [ordem, setOrdem] = useState<Ordenacao>({ campo: "sku", asc: true });
   const [detalhe, setDetalhe] = useState<LinhaSku | null>(null);
-  const [colando, setColando] = useState<number | null>(null);
+  const [colando, setColando] = useState(false);
   const [textoColado, setTextoColado] = useState("");
-  const [ordemSelId, setOrdemSelId] = useState<string | null>(null);
+  const [empresaNova, setEmpresaNova] = useState<string>(EMPRESAS_TINY[0]);
+  const [numeroNovo, setNumeroNovo] = useState("");
+  const [selecionadas, setSelecionadas] = useState<string[]>([]);
 
   const qc = useQueryClient();
   const buscarOrdens = useServerFn(listarOrdensTiny);
   const obterUrlAuth = useServerFn(urlAutorizacaoTiny);
+
+  // Integração automática com o Tiny fica pronta, porém desligada até o app
+  // OAuth do Tiny existir (é necessário cadastrar a URL de retorno lá).
+  const TINY_ATIVO = false;
 
   async function conectarTiny() {
     const url = await obterUrlAuth({
@@ -61,14 +67,11 @@ export function ProgramacaoTab({
     });
     window.location.href = url;
   }
-  const {
-    data: ordensTiny,
-    isFetching: carregandoTiny,
-    error: erroTiny,
-  } = useQuery<OrdemTiny[]>({
+  const { data: ordensTiny } = useQuery<OrdemTiny[]>({
     queryKey: ["tiny-ordens"],
     queryFn: () => buscarOrdens(),
     staleTime: 60_000,
+    enabled: TINY_ATIVO,
   });
 
   const { data: entregas } = useQuery({
@@ -86,22 +89,83 @@ export function ProgramacaoTab({
     return m;
   }, [entregas]);
 
-  const ordemSel = (ordensTiny ?? []).find((o) => o.id === ordemSelId) ?? null;
+  type OrdemPainel = {
+    id: string;
+    numero: string;
+    empresa: string;
+    data: string;
+    slot: number | null;
+    itens: Array<{ codigo: string; quantidade: number }>;
+  };
 
-  const pctEntregue = (o: OrdemTiny) => {
+  const ordens: OrdemPainel[] = useMemo(() => {
+    const manuais: OrdemPainel[] = (dados.pedidos ?? []).map((p) => ({
+      id: `p${p.slot}`,
+      numero: p.numero ?? String(p.slot),
+      empresa: p.fornecedor ?? "",
+      data: p.data ?? "",
+      slot: p.slot,
+      itens: (p.itens ?? [])
+        .filter((i) => !!i.sku)
+        .map((i) => ({ codigo: String(i.sku), quantidade: Number(i.qtde || 0) })),
+    }));
+    const doTiny: OrdemPainel[] = (ordensTiny ?? []).map((o) => ({
+      id: o.id,
+      numero: o.numero,
+      empresa: o.empresa,
+      data: o.data,
+      slot: null,
+      itens: o.itens.map((i) => ({ codigo: i.codigo, quantidade: i.quantidade })),
+    }));
+    return [...manuais, ...doTiny].sort((a, b) => Number(b.numero) - Number(a.numero));
+  }, [dados.pedidos, ordensTiny]);
+
+  const ordensSel = useMemo(
+    () => ordens.filter((o) => selecionadas.includes(o.id)),
+    [ordens, selecionadas],
+  );
+  const temSelecao = ordensSel.length > 0;
+
+  const pctEntregue = (o: OrdemPainel) => {
     const total = o.itens.length;
     if (!total) return 0;
     const feitos = o.itens.filter((i) => entregueMap[`${o.id}|${i.codigo.toUpperCase()}`]).length;
     return (feitos / total) * 100;
   };
 
-  async function alternarEntrega(ordemId: string, sku: string, atual: boolean) {
-    if (atual) {
-      await supabase.from("ordens_entregas").delete().eq("ordem_id", ordemId).eq("sku", sku);
-    } else {
-      await supabase
-        .from("ordens_entregas")
-        .upsert({ ordem_id: ordemId, sku, entregue: true, updated_at: new Date().toISOString() });
+  function alternarOrdem(id: string) {
+    setSelecionadas((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
+  }
+
+  function alternarEmpresa(empresa: string) {
+    const ids = ordens.filter((o) => o.empresa === empresa).map((o) => o.id);
+    const todas = ids.length > 0 && ids.every((id) => selecionadas.includes(id));
+    setSelecionadas((s) => (todas ? s.filter((x) => !ids.includes(x)) : [...new Set([...s, ...ids])]));
+  }
+
+  function excluirOrdem(o: OrdemPainel) {
+    if (o.slot === null) return;
+    const slot = o.slot;
+    setSelecionadas((s) => s.filter((x) => x !== o.id));
+    salvar(async () => {
+      await supabase.from("ordens_entregas").delete().eq("ordem_id", o.id);
+      void qc.invalidateQueries({ queryKey: ["ordens-entregas"] });
+      return supabase.from("pedidos_importados").delete().eq("slot", slot);
+    });
+  }
+
+
+  async function alternarEntrega(sku: string, entregue: boolean) {
+    const chave = sku.trim().toUpperCase();
+    const alvo = ordensSel.filter((o) => o.itens.some((i) => i.codigo.trim().toUpperCase() === chave));
+    for (const o of alvo) {
+      if (entregue) {
+        await supabase.from("ordens_entregas").delete().eq("ordem_id", o.id).eq("sku", sku);
+      } else {
+        await supabase
+          .from("ordens_entregas")
+          .upsert({ ordem_id: o.id, sku, entregue: true, updated_at: new Date().toISOString() });
+      }
     }
     void qc.invalidateQueries({ queryKey: ["ordens-entregas"] });
   }
@@ -109,23 +173,17 @@ export function ProgramacaoTab({
   const qtdePorSku = useMemo(() => {
     if (modo === "manual") return dados.manual;
     const map: Record<string, number> = {};
-    if (ordemSel) {
-      for (const item of ordemSel.itens) {
+    const base = ordensSel.length > 0 ? ordensSel : [];
+    for (const o of base) {
+      for (const item of o.itens) {
         const k = item.codigo.trim().toUpperCase();
         if (!k) continue;
         map[k] = (map[k] ?? 0) + Number(item.quantidade || 0);
       }
-      return map;
-    }
-    for (const p of dados.pedidos) {
-      for (const item of p.itens ?? []) {
-        if (!item.sku) continue;
-        const k = item.sku.trim().toUpperCase();
-        map[k] = (map[k] ?? 0) + Number(item.qtde || 0);
-      }
     }
     return map;
-  }, [modo, dados.manual, dados.pedidos, ordemSel]);
+  }, [modo, dados.manual, ordensSel]);
+
 
 
   const linhas = useMemo(
@@ -242,24 +300,28 @@ export function ProgramacaoTab({
 
 
 
-  async function importarPdf(slot: number, file: File) {
+  const proximoSlot = () =>
+    (dados.pedidos ?? []).reduce((a, p) => Math.max(a, p.slot), -1) + 1;
+
+  async function importarPdf(file: File) {
     try {
       const linhasTexto = await extrairTextoPdf(file);
-      gravarPedido(slot, linhasTexto);
+      gravarPedido(linhasTexto);
     } catch {
-      setColando(slot);
+      setColando(true);
     }
   }
 
-  function gravarPedido(slot: number, linhasTexto: string[]) {
+  function gravarPedido(linhasTexto: string[]) {
     const parsed = parsePedidoLinhas(linhasTexto);
     const itens = vincularItens(parsed.itens, dados.skus, dados.produtos);
     salvar(() =>
       supabase.from("pedidos_importados").upsert({
-        slot,
-        numero: parsed.numero,
+        slot: proximoSlot(),
+        numero: numeroNovo.trim() || parsed.numero,
         data: parsed.data,
-        fornecedor: parsed.fornecedor,
+        fornecedor: empresaNova,
+
         itens: itens as unknown as never,
         importado_em: new Date().toISOString(),
       }),
@@ -309,9 +371,26 @@ export function ProgramacaoTab({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-2">
-        <SecaoTitulo>Ordens de compra em aberto (Tiny)</SecaoTitulo>
-        <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <SecaoTitulo>Ordens de compra em aberto</SecaoTitulo>
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            value={empresaNova}
+            onChange={(e) => setEmpresaNova(e.target.value)}
+            className="rounded-md border border-input bg-background px-2 py-1 text-[11px]"
+          >
+            {EMPRESAS_TINY.map((e) => (
+              <option key={e} value={e}>
+                {e}
+              </option>
+            ))}
+          </select>
+          <Input
+            value={numeroNovo}
+            onChange={(e) => setNumeroNovo(e.target.value)}
+            placeholder="Nº da ordem"
+            className="h-7 w-28 text-[11px]"
+          />
           <label className="cursor-pointer rounded-md border border-border px-2 py-1 text-[11px] hover:bg-accent">
             importar PDF
             <input
@@ -320,54 +399,50 @@ export function ProgramacaoTab({
               className="hidden"
               onChange={(e) => {
                 const f = e.target.files?.[0];
-                if (f) void importarPdf(0, f);
+                if (f) void importarPdf(f);
+                e.target.value = "";
               }}
             />
           </label>
-          <button className="text-[11px] text-primary underline" onClick={() => setColando(0)}>
+          <button className="text-[11px] text-primary underline" onClick={() => setColando(true)}>
             colar texto
           </button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => void qc.invalidateQueries({ queryKey: ["tiny-ordens"] })}
-          >
-            <RefreshCw className={`mr-1 size-4 ${carregandoTiny ? "animate-spin" : ""}`} /> Atualizar
-          </Button>
+          {TINY_ATIVO && (
+            <Button variant="outline" size="sm" onClick={() => void conectarTiny()}>
+              <RefreshCw className="mr-1 size-4" /> Conectar Tiny
+            </Button>
+          )}
+          {selecionadas.length > 0 && (
+            <button
+              className="text-[11px] text-muted-foreground underline"
+              onClick={() => setSelecionadas([])}
+            >
+              limpar seleção
+            </button>
+          )}
         </div>
       </div>
 
-      {erroTiny && (
-        String(erroTiny).includes("TINY_NAO_AUTORIZADO") ? (
-          <div className="rounded-lg border border-dashed border-border bg-card p-4 text-sm">
-            <p className="font-semibold">Conecte sua conta do Tiny para buscar as ordens de compra em aberto.</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Você será redirecionado ao Tiny para autorizar o acesso (somente leitura).
-            </p>
-            <Button size="sm" className="mt-3" onClick={() => void conectarTiny()}>
-              Conectar Tiny
-            </Button>
-          </div>
-        ) : (
-          <p className="text-xs text-destructive">
-            Não foi possível carregar as ordens do Tiny.{" "}
-            <button className="underline" onClick={() => void conectarTiny()}>
-              Reconectar conta
-            </button>
-          </p>
-        )
-      )}
-      {carregandoTiny && !ordensTiny && (
-        <p className="text-xs text-muted-foreground">Carregando ordens do Tiny...</p>
-      )}
-
       <div className="grid gap-3 md:grid-cols-3">
         {EMPRESAS_TINY.map((empresa) => {
-          const lista = (ordensTiny ?? []).filter((o) => o.empresa === empresa);
+          const lista = ordens.filter((o) => o.empresa === empresa);
+          const todas = lista.length > 0 && lista.every((o) => selecionadas.includes(o.id));
           return (
             <div key={empresa} className="rounded-lg border border-border bg-card p-2">
-              <div className="mb-2 truncate text-[11px] font-bold uppercase tracking-wide text-primary" title={empresa}>
-                {empresa}
+              <div className="mb-2 flex items-start justify-between gap-2">
+                <div
+                  className="truncate text-[11px] font-bold uppercase tracking-wide text-primary"
+                  title={empresa}
+                >
+                  {empresa}
+                </div>
+                <button
+                  disabled={lista.length === 0}
+                  onClick={() => alternarEmpresa(empresa)}
+                  className="shrink-0 rounded border border-border px-1.5 py-0.5 text-[10px] font-semibold uppercase hover:bg-accent disabled:opacity-40"
+                >
+                  {todas ? "limpar todas" : "selecionar todas"}
+                </button>
               </div>
               {lista.length === 0 ? (
                 <div className="px-1 py-2 text-[11px] text-muted-foreground">Sem ordens em aberto.</div>
@@ -375,29 +450,42 @@ export function ProgramacaoTab({
                 <div className="flex flex-wrap gap-2">
                   {lista.map((o) => {
                     const pct = pctEntregue(o);
-                    const sel = ordemSelId === o.id;
+                    const sel = selecionadas.includes(o.id);
                     return (
-                      <button
+                      <div
                         key={o.id}
-                        onClick={() => setOrdemSelId(sel ? null : o.id)}
-                        className={`min-w-[104px] rounded-md border px-2 py-1 text-left transition-colors ${
+                        className={`relative min-w-[112px] rounded-md border transition-colors ${
                           sel
                             ? "border-primary bg-primary text-primary-foreground"
                             : "border-border bg-background hover:bg-accent"
                         }`}
                       >
-                        <div className="text-sm font-bold leading-tight">Nº {o.numero}</div>
-                        <div className="text-[10px] opacity-80">
-                          {o.data} · {o.itens.length} itens
-                        </div>
-                        <div className="mt-1 h-1.5 w-full overflow-hidden rounded bg-muted">
-                          <div
-                            className={`h-full ${sel ? "bg-primary-foreground" : "bg-primary"}`}
-                            style={{ width: `${pct}%` }}
-                          />
-                        </div>
-                        <div className="text-[10px] font-semibold">{fmt(pct, 0)}% entregue</div>
-                      </button>
+                        <button
+                          onClick={() => alternarOrdem(o.id)}
+                          className="block w-full px-2 py-1 text-left"
+                        >
+                          <div className="text-sm font-bold leading-tight">Nº {o.numero}</div>
+                          <div className="text-[10px] opacity-80">
+                            {o.data} · {o.itens.length} itens
+                          </div>
+                          <div className="mt-1 h-1.5 w-full overflow-hidden rounded bg-muted">
+                            <div
+                              className={`h-full ${sel ? "bg-primary-foreground" : "bg-primary"}`}
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
+                          <div className="text-[10px] font-semibold">{fmt(pct, 0)}% entregue</div>
+                        </button>
+                        {o.slot !== null && (
+                          <button
+                            title="excluir ordem"
+                            onClick={() => excluirOrdem(o)}
+                            className="absolute right-0.5 top-0.5 rounded px-1 text-[10px] font-bold opacity-60 hover:opacity-100"
+                          >
+                            ×
+                          </button>
+                        )}
+                      </div>
                     );
                   })}
                 </div>
@@ -406,6 +494,7 @@ export function ProgramacaoTab({
           );
         })}
       </div>
+
 
 
       <div className="flex flex-wrap items-center gap-3">
@@ -543,7 +632,7 @@ export function ProgramacaoTab({
           <table className="w-full text-xs">
             <thead className="sticky top-0 z-10 bg-grid-head text-grid-head-foreground shadow-[0_1px_0_var(--color-border)]">
               <tr>
-                <th className="bg-grid-head px-2 py-1" colSpan={ordemSel ? 6 : 5} />
+                <th className="bg-grid-head px-2 py-1" colSpan={temSelecao ? 6 : 5} />
                 <th
                   className="border-x border-border bg-mp-head px-2 py-1 text-center text-[11px] font-bold uppercase tracking-wide text-mp-head-foreground"
                   colSpan={dados.mpItens.length}
@@ -553,7 +642,7 @@ export function ProgramacaoTab({
                 <th className="bg-grid-head px-2 py-1" colSpan={2} />
               </tr>
               <tr>
-                {ordemSel && (
+                {temSelecao && (
                   <th className="whitespace-nowrap bg-grid-head px-2 py-1.5 text-left text-[11px] font-bold uppercase">
                     Entrega
                   </th>
@@ -578,7 +667,11 @@ export function ProgramacaoTab({
             <tbody>
               {linhasVisiveis.map((l) => {
                 const chaveSku = l.sku.sku.trim().toUpperCase();
-                const entregue = !!(ordemSel && entregueMap[`${ordemSel.id}|${chaveSku}`]);
+                const alvos = ordensSel.filter((o) =>
+                  o.itens.some((i) => i.codigo.trim().toUpperCase() === chaveSku),
+                );
+                const entregue =
+                  alvos.length > 0 && alvos.every((o) => entregueMap[`${o.id}|${chaveSku}`]);
                 return (
                   <tr
                     key={l.sku.id}
@@ -586,10 +679,10 @@ export function ProgramacaoTab({
                       entregue ? "bg-muted text-muted-foreground opacity-70" : "even:bg-mp-cell"
                     }`}
                   >
-                    {ordemSel && (
+                    {temSelecao && (
                       <td className="px-2 py-0.5">
                         <button
-                          onClick={() => void alternarEntrega(ordemSel.id, l.sku.sku, entregue)}
+                          onClick={() => void alternarEntrega(l.sku.sku, entregue)}
                           className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-semibold uppercase ${
                             entregue
                               ? "border-primary bg-primary text-primary-foreground"
@@ -645,7 +738,7 @@ export function ProgramacaoTab({
               {linhasVisiveis.length === 0 && (
                 <tr>
                   <td
-                    colSpan={7 + dados.mpItens.length + (ordemSel ? 1 : 0)}
+                    colSpan={7 + dados.mpItens.length + (temSelecao ? 1 : 0)}
                     className="px-3 py-6 text-center text-muted-foreground"
                   >
                     Nada para mostrar.
@@ -656,7 +749,7 @@ export function ProgramacaoTab({
             {linhasVisiveis.length > 0 && (
               <tfoot>
                 <tr className="border-t-2 border-border bg-secondary font-bold text-secondary-foreground">
-                  <td className="whitespace-nowrap px-2 py-1.5 uppercase" colSpan={ordemSel ? 4 : 3}>
+                  <td className="whitespace-nowrap px-2 py-1.5 uppercase" colSpan={temSelecao ? 4 : 3}>
                     Total ({linhasVisiveis.length} itens)
                   </td>
                   <td className="px-2 py-1.5 text-right">{fmtInt(totaisVisiveis.quantidade)}</td>
@@ -770,7 +863,7 @@ export function ProgramacaoTab({
         </DialogContent>
       </Dialog>
 
-      <Dialog open={colando !== null} onOpenChange={(v) => !v && setColando(null)}>
+      <Dialog open={colando} onOpenChange={(v) => !v && setColando(false)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Colar texto da Ordem de Compra</DialogTitle>
@@ -784,10 +877,10 @@ export function ProgramacaoTab({
           />
           <Button
             onClick={() => {
-              if (colando === null) return;
-              gravarPedido(colando, textoColado.split("\n"));
+              gravarPedido(textoColado.split("\n"));
               setTextoColado("");
-              setColando(null);
+              setNumeroNovo("");
+              setColando(false);
             }}
           >
             Importar
