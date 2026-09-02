@@ -632,7 +632,7 @@ export function ProgramacaoTab({
           <table className="w-full text-xs">
             <thead className="sticky top-0 z-10 bg-grid-head text-grid-head-foreground shadow-[0_1px_0_var(--color-border)]">
               <tr>
-                <th className="bg-grid-head px-2 py-1" colSpan={ordemSel ? 6 : 5} />
+                <th className="bg-grid-head px-2 py-1" colSpan={temSelecao ? 6 : 5} />
                 <th
                   className="border-x border-border bg-mp-head px-2 py-1 text-center text-[11px] font-bold uppercase tracking-wide text-mp-head-foreground"
                   colSpan={dados.mpItens.length}
@@ -642,7 +642,7 @@ export function ProgramacaoTab({
                 <th className="bg-grid-head px-2 py-1" colSpan={2} />
               </tr>
               <tr>
-                {ordemSel && (
+                {temSelecao && (
                   <th className="whitespace-nowrap bg-grid-head px-2 py-1.5 text-left text-[11px] font-bold uppercase">
                     Entrega
                   </th>
@@ -667,7 +667,11 @@ export function ProgramacaoTab({
             <tbody>
               {linhasVisiveis.map((l) => {
                 const chaveSku = l.sku.sku.trim().toUpperCase();
-                const entregue = !!(ordemSel && entregueMap[`${ordemSel.id}|${chaveSku}`]);
+                const alvos = ordensSel.filter((o) =>
+                  o.itens.some((i) => i.codigo.trim().toUpperCase() === chaveSku),
+                );
+                const entregue =
+                  alvos.length > 0 && alvos.every((o) => entregueMap[`${o.id}|${chaveSku}`]);
                 return (
                   <tr
                     key={l.sku.id}
@@ -675,10 +679,10 @@ export function ProgramacaoTab({
                       entregue ? "bg-muted text-muted-foreground opacity-70" : "even:bg-mp-cell"
                     }`}
                   >
-                    {ordemSel && (
+                    {temSelecao && (
                       <td className="px-2 py-0.5">
                         <button
-                          onClick={() => void alternarEntrega(ordemSel.id, l.sku.sku, entregue)}
+                          onClick={() => void alternarEntrega(l.sku.sku, entregue)}
                           className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-semibold uppercase ${
                             entregue
                               ? "border-primary bg-primary text-primary-foreground"
@@ -734,7 +738,7 @@ export function ProgramacaoTab({
               {linhasVisiveis.length === 0 && (
                 <tr>
                   <td
-                    colSpan={7 + dados.mpItens.length + (ordemSel ? 1 : 0)}
+                    colSpan={7 + dados.mpItens.length + (temSelecao ? 1 : 0)}
                     className="px-3 py-6 text-center text-muted-foreground"
                   >
                     Nada para mostrar.
@@ -745,7 +749,7 @@ export function ProgramacaoTab({
             {linhasVisiveis.length > 0 && (
               <tfoot>
                 <tr className="border-t-2 border-border bg-secondary font-bold text-secondary-foreground">
-                  <td className="whitespace-nowrap px-2 py-1.5 uppercase" colSpan={ordemSel ? 4 : 3}>
+                  <td className="whitespace-nowrap px-2 py-1.5 uppercase" colSpan={temSelecao ? 4 : 3}>
                     Total ({linhasVisiveis.length} itens)
                   </td>
                   <td className="px-2 py-1.5 text-right">{fmtInt(totaisVisiveis.quantidade)}</td>
@@ -859,7 +863,7 @@ export function ProgramacaoTab({
         </DialogContent>
       </Dialog>
 
-      <Dialog open={colando !== null} onOpenChange={(v) => !v && setColando(null)}>
+      <Dialog open={colando} onOpenChange={(v) => !v && setColando(false)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Colar texto da Ordem de Compra</DialogTitle>
@@ -873,10 +877,10 @@ export function ProgramacaoTab({
           />
           <Button
             onClick={() => {
-              if (colando === null) return;
-              gravarPedido(colando, textoColado.split("\n"));
+              gravarPedido(textoColado.split("\n"));
               setTextoColado("");
-              setColando(null);
+              setNumeroNovo("");
+              setColando(false);
             }}
           >
             Importar
