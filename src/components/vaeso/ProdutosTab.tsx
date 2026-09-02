@@ -10,7 +10,7 @@ import { brl, consumoKg, fmt, num, pecasHora, resolveValorKg } from "@/lib/vaeso
 
 export function ProdutosTab({ dados, salvar }: { dados: Dados; salvar: Salvar }) {
   const [busca, setBusca] = useState("");
-  const [fechados, setFechados] = useState<Record<string, boolean>>({});
+  const [abertos, setAbertos] = useState<Record<string, boolean>>({});
   const termo = busca.trim().toLowerCase();
 
   const produtos = dados.produtos.filter(
