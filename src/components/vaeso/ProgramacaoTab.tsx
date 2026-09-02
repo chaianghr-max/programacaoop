@@ -143,14 +143,17 @@ export function ProgramacaoTab({
     setSelecionadas((s) => (todas ? s.filter((x) => !ids.includes(x)) : [...new Set([...s, ...ids])]));
   }
 
-  async function excluirOrdem(o: OrdemPainel) {
+  function excluirOrdem(o: OrdemPainel) {
     if (o.slot === null) return;
+    const slot = o.slot;
     setSelecionadas((s) => s.filter((x) => x !== o.id));
-    await supabase.from("pedidos_importados").delete().eq("slot", o.slot);
-    await supabase.from("ordens_entregas").delete().eq("ordem_id", o.id);
-    salvar(() => Promise.resolve({ error: null }) as never);
-    void qc.invalidateQueries({ queryKey: ["ordens-entregas"] });
+    salvar(async () => {
+      await supabase.from("ordens_entregas").delete().eq("ordem_id", o.id);
+      void qc.invalidateQueries({ queryKey: ["ordens-entregas"] });
+      return supabase.from("pedidos_importados").delete().eq("slot", slot);
+    });
   }
+
 
   async function alternarEntrega(sku: string, entregue: boolean) {
     const chave = sku.trim().toUpperCase();
