@@ -511,18 +511,23 @@ export function ProgramacaoTab({
           </table>
         ) : (
           <table className="w-full text-xs">
-            <thead className="bg-grid-head text-grid-head-foreground">
+            <thead className="sticky top-0 z-10 bg-grid-head text-grid-head-foreground shadow-[0_1px_0_var(--color-border)]">
               <tr>
-                <th className="px-2 py-1" colSpan={5} />
+                <th className="bg-grid-head px-2 py-1" colSpan={ordemSel ? 6 : 5} />
                 <th
                   className="border-x border-border bg-mp-head px-2 py-1 text-center text-[11px] font-bold uppercase tracking-wide text-mp-head-foreground"
                   colSpan={dados.mpItens.length}
                 >
                   Consumo MP (kg)
                 </th>
-                <th className="px-2 py-1" colSpan={2} />
+                <th className="bg-grid-head px-2 py-1" colSpan={2} />
               </tr>
               <tr>
+                {ordemSel && (
+                  <th className="whitespace-nowrap bg-grid-head px-2 py-1.5 text-left text-[11px] font-bold uppercase">
+                    Entrega
+                  </th>
+                )}
                 {th("tipo", "Tipo")}
                 {th("sku", "SKU")}
                 {th("descricao", "Descrição")}
@@ -537,56 +542,82 @@ export function ProgramacaoTab({
                   </th>
                 ))}
                 {th("horas", "Horas máquina")}
-                <th className="px-3 py-2" />
+                <th className="bg-grid-head px-3 py-2" />
               </tr>
             </thead>
             <tbody>
-              {linhasVisiveis.map((l) => (
-                <tr key={l.sku.id} className="border-t border-border even:bg-mp-cell">
-                  <td className="px-2 py-0.5">{l.produto?.tipo ?? "?"}</td>
-                  <td className="px-2 py-0.5 font-medium">{l.sku.sku}</td>
-                  <td className="px-2 py-0.5">{l.sku.descricao}</td>
-                  <td className="px-1 py-0.5 text-right font-bold">
-                    {modo === "manual" ? (
-                      <CellInput
-                        type="number"
-                        value={dados.manual[l.sku.sku] ?? 0}
-                        className="text-right font-bold"
-                        onCommit={(v) =>
-                          salvar(() =>
-                            supabase
-                              .from("programacao_manual")
-                              .upsert({ sku: l.sku.sku, quantidade: num(v) ?? 0, updated_at: new Date().toISOString() }),
-                          )
-                        }
-                      />
-                    ) : (
-                      fmtInt(l.quantidade)
-                    )}
-                  </td>
-                  <td className="px-2 py-0.5 text-right">{l.produto ? fmt(l.pallet, 1) : "-"}</td>
-                  {dados.mpItens.map((m) => {
-                    const kg = l.kgPorMp[m.descricao.trim().toUpperCase()];
-                    return (
-                      <td key={m.id} className="bg-mp-cell px-2 py-0.5 text-right">
-                        {kg ? fmt(kg) : "-"}
+              {linhasVisiveis.map((l) => {
+                const chaveSku = l.sku.sku.trim().toUpperCase();
+                const entregue = !!(ordemSel && entregueMap[`${ordemSel.id}|${chaveSku}`]);
+                return (
+                  <tr
+                    key={l.sku.id}
+                    className={`border-t border-border ${
+                      entregue ? "bg-muted text-muted-foreground opacity-70" : "even:bg-mp-cell"
+                    }`}
+                  >
+                    {ordemSel && (
+                      <td className="px-2 py-0.5">
+                        <button
+                          onClick={() => void alternarEntrega(ordemSel.id, l.sku.sku, entregue)}
+                          className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-semibold uppercase ${
+                            entregue
+                              ? "border-primary bg-primary text-primary-foreground"
+                              : "border-border bg-background hover:bg-accent"
+                          }`}
+                        >
+                          <Check className="size-3" /> {entregue ? "Entregue" : "Entregar"}
+                        </button>
                       </td>
-                    );
-                  })}
-                  <td className="px-2 py-0.5 text-right">{fmt(l.horas, 1)}</td>
-                  <td className="px-2 py-0.5 text-right">
-                    <button
-                      className="rounded border border-border bg-background px-2 py-0.5 text-[11px] font-medium text-foreground hover:bg-accent"
-                      onClick={() => setDetalhe(l)}
-                    >
-                      ver cálculo
-                    </button>
-                  </td>
-                </tr>
-              ))}
+                    )}
+                    <td className="px-2 py-0.5">{l.produto?.tipo ?? "?"}</td>
+                    <td className="px-2 py-0.5 font-medium">{l.sku.sku}</td>
+                    <td className="px-2 py-0.5">{l.sku.descricao}</td>
+                    <td className="px-1 py-0.5 text-right font-bold">
+                      {modo === "manual" ? (
+                        <CellInput
+                          type="number"
+                          value={dados.manual[l.sku.sku] ?? 0}
+                          className="text-right font-bold"
+                          onCommit={(v) =>
+                            salvar(() =>
+                              supabase
+                                .from("programacao_manual")
+                                .upsert({ sku: l.sku.sku, quantidade: num(v) ?? 0, updated_at: new Date().toISOString() }),
+                            )
+                          }
+                        />
+                      ) : (
+                        fmtInt(l.quantidade)
+                      )}
+                    </td>
+                    <td className="px-2 py-0.5 text-right">{l.produto ? fmt(l.pallet, 1) : "-"}</td>
+                    {dados.mpItens.map((m) => {
+                      const kg = l.kgPorMp[m.descricao.trim().toUpperCase()];
+                      return (
+                        <td key={m.id} className="bg-mp-cell px-2 py-0.5 text-right">
+                          {kg ? fmt(kg) : "-"}
+                        </td>
+                      );
+                    })}
+                    <td className="px-2 py-0.5 text-right">{fmt(l.horas, 1)}</td>
+                    <td className="px-2 py-0.5 text-right">
+                      <button
+                        className="rounded border border-border bg-background px-2 py-0.5 text-[11px] font-medium text-foreground hover:bg-accent"
+                        onClick={() => setDetalhe(l)}
+                      >
+                        ver cálculo
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
               {linhasVisiveis.length === 0 && (
                 <tr>
-                  <td colSpan={6 + dados.mpItens.length} className="px-3 py-6 text-center text-muted-foreground">
+                  <td
+                    colSpan={7 + dados.mpItens.length + (ordemSel ? 1 : 0)}
+                    className="px-3 py-6 text-center text-muted-foreground"
+                  >
                     Nada para mostrar.
                   </td>
                 </tr>
@@ -595,11 +626,13 @@ export function ProgramacaoTab({
             {linhasVisiveis.length > 0 && (
               <tfoot>
                 <tr className="border-t-2 border-border bg-secondary font-bold text-secondary-foreground">
-                  <td className="whitespace-nowrap px-2 py-1.5 uppercase" colSpan={3}>
+                  <td className="whitespace-nowrap px-2 py-1.5 uppercase" colSpan={ordemSel ? 4 : 3}>
                     Total ({linhasVisiveis.length} itens)
                   </td>
                   <td className="px-2 py-1.5 text-right">{fmtInt(totaisVisiveis.quantidade)}</td>
-                  <td className="px-2 py-1.5" />
+                  <td className="whitespace-nowrap px-2 py-1.5 text-right">
+                    {fmt(totaisVisiveis.pallets, 2)} pallets
+                  </td>
                   {dados.mpItens.map((m) => (
                     <td key={m.id} className="bg-mp-cell px-2 py-1.5 text-right">
                       {totaisVisiveis.mpKg[m.id] ? fmt(totaisVisiveis.mpKg[m.id]) : "-"}
@@ -611,6 +644,7 @@ export function ProgramacaoTab({
               </tfoot>
             )}
           </table>
+
         )}
       </div>
 
