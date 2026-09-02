@@ -407,7 +407,6 @@ export function ProgramacaoTab({
                 </tr>
               </tfoot>
             )}
-            </tbody>
           </table>
         ) : (
           <table className="w-full text-xs">
