@@ -457,35 +457,6 @@ export function ProgramacaoTab({
           </table>
         </div>
 
-        <div className="overflow-hidden rounded-lg border border-border bg-card">
-          <div className="bg-secondary px-3 py-2 text-sm font-semibold text-secondary-foreground">
-            Itens do PDF sem SKU reconhecido
-          </div>
-          {itensSemSku.length === 0 ? (
-            <div className="px-3 py-4 text-sm text-muted-foreground">Nenhum item pendente.</div>
-          ) : (
-            <table className="w-full text-xs">
-              <thead className="bg-muted text-xs text-muted-foreground">
-                <tr>
-                  <th className="px-2 py-0.5 text-left">Pedido</th>
-                  <th className="px-2 py-0.5 text-left">Item</th>
-                  <th className="px-2 py-0.5 text-left">SKU</th>
-                  <th className="px-2 py-0.5 text-right">Qtde</th>
-                </tr>
-              </thead>
-              <tbody>
-                {itensSemSku.map((i, idx) => (
-                  <tr key={idx} className="border-t border-border odd:bg-muted/30">
-                    <td className="px-2 py-0.5">{i.pedido}</td>
-                    <td className="px-2 py-0.5">{i.nome}</td>
-                    <td className="px-2 py-0.5">{i.sku ?? "—"}</td>
-                    <td className="px-2 py-0.5 text-right">{fmtInt(i.qtde)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
       </div>
 
       <Dialog open={!!detalhe} onOpenChange={(v) => !v && setDetalhe(null)}>
