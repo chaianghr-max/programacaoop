@@ -300,24 +300,28 @@ export function ProgramacaoTab({
 
 
 
-  async function importarPdf(slot: number, file: File) {
+  const proximoSlot = () =>
+    (dados.pedidos ?? []).reduce((a, p) => Math.max(a, p.slot), -1) + 1;
+
+  async function importarPdf(file: File) {
     try {
       const linhasTexto = await extrairTextoPdf(file);
-      gravarPedido(slot, linhasTexto);
+      gravarPedido(linhasTexto);
     } catch {
-      setColando(slot);
+      setColando(true);
     }
   }
 
-  function gravarPedido(slot: number, linhasTexto: string[]) {
+  function gravarPedido(linhasTexto: string[]) {
     const parsed = parsePedidoLinhas(linhasTexto);
     const itens = vincularItens(parsed.itens, dados.skus, dados.produtos);
     salvar(() =>
       supabase.from("pedidos_importados").upsert({
-        slot,
-        numero: parsed.numero,
+        slot: proximoSlot(),
+        numero: numeroNovo.trim() || parsed.numero,
         data: parsed.data,
-        fornecedor: parsed.fornecedor,
+        fornecedor: empresaNova,
+
         itens: itens as unknown as never,
         importado_em: new Date().toISOString(),
       }),
