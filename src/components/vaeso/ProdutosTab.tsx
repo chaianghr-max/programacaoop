@@ -72,7 +72,7 @@ export function ProdutosTab({ dados, salvar }: { dados: Dados; salvar: Salvar })
       <div className="space-y-4">
         {produtos.map((p) => {
           const comps = dados.componentes.filter((c) => c.produto_id === p.id);
-          const aberto = !fechados[p.id];
+          const aberto = !!abertos[p.id];
           const meio = Math.floor(Math.max(comps.length - 1, 0) / 2);
           return (
             <div key={p.id} className="overflow-hidden rounded-lg border border-border bg-card">
