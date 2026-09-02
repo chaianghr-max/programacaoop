@@ -53,6 +53,14 @@ export function ProgramacaoTab({
 
   const qc = useQueryClient();
   const buscarOrdens = useServerFn(listarOrdensTiny);
+  const obterUrlAuth = useServerFn(urlAutorizacaoTiny);
+
+  async function conectarTiny() {
+    const url = await obterUrlAuth({
+      data: { redirectUri: `${window.location.origin}/tiny-callback` },
+    });
+    window.location.href = url;
+  }
   const {
     data: ordensTiny,
     isFetching: carregandoTiny,
