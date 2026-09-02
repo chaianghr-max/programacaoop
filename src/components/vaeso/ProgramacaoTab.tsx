@@ -296,61 +296,87 @@ export function ProgramacaoTab({
 
   return (
     <div className="space-y-4">
-      <SecaoTitulo>Importar ordens de compra do Tiny (PDF) — até 3 simultâneas</SecaoTitulo>
+      <div className="flex items-center justify-between gap-2">
+        <SecaoTitulo>Ordens de compra em aberto (Tiny)</SecaoTitulo>
+        <div className="flex items-center gap-2">
+          <label className="cursor-pointer rounded-md border border-border px-2 py-1 text-[11px] hover:bg-accent">
+            importar PDF
+            <input
+              type="file"
+              accept="application/pdf"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void importarPdf(0, f);
+              }}
+            />
+          </label>
+          <button className="text-[11px] text-primary underline" onClick={() => setColando(0)}>
+            colar texto
+          </button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void qc.invalidateQueries({ queryKey: ["tiny-ordens"] })}
+          >
+            <RefreshCw className={`mr-1 size-4 ${carregandoTiny ? "animate-spin" : ""}`} /> Atualizar
+          </Button>
+        </div>
+      </div>
+
+      {erroTiny && (
+        <p className="text-xs text-destructive">Não foi possível carregar as ordens do Tiny.</p>
+      )}
+      {carregandoTiny && !ordensTiny && (
+        <p className="text-xs text-muted-foreground">Carregando ordens do Tiny...</p>
+      )}
+
       <div className="grid gap-3 md:grid-cols-3">
-        {[0, 1, 2].map((slot) => {
-          const pedido = dados.pedidos.find((p) => p.slot === slot);
+        {EMPRESAS_TINY.map((empresa) => {
+          const lista = (ordensTiny ?? []).filter((o) => o.empresa === empresa);
           return (
-            <div key={slot} className="rounded-lg border border-dashed border-border bg-card p-3">
-              {pedido ? (
-                <div className="space-y-1 text-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-primary">Pedido {pedido.numero ?? "—"}</span>
-                    <button
-                      aria-label="Remover pedido"
-                      onClick={() =>
-                        salvar(() => supabase.from("pedidos_importados").delete().eq("slot", slot))
-                      }
-                    >
-                      <X className="size-4 text-muted-foreground hover:text-destructive" />
-                    </button>
-                  </div>
-                  <div className="text-muted-foreground">{pedido.fornecedor ?? "Fornecedor —"}</div>
-                  <div className="text-muted-foreground">
-                    {pedido.data ?? "—"} · {(pedido.itens ?? []).length} itens
-                  </div>
-                  <button
-                    className="text-xs text-primary underline"
-                    onClick={() => setColando(slot)}
-                  >
-                    trocar / colar texto
-                  </button>
-                </div>
+            <div key={empresa} className="rounded-lg border border-border bg-card p-2">
+              <div className="mb-2 truncate text-[11px] font-bold uppercase tracking-wide text-primary" title={empresa}>
+                {empresa}
+              </div>
+              {lista.length === 0 ? (
+                <div className="px-1 py-2 text-[11px] text-muted-foreground">Sem ordens em aberto.</div>
               ) : (
-                <div className="space-y-2 text-center text-sm text-muted-foreground">
-                  <Upload className="mx-auto size-5" />
-                  <div>Ordem de Compra {slot + 1}</div>
-                  <label className="inline-block cursor-pointer rounded-md border border-border px-2 py-1 text-xs hover:bg-accent">
-                    escolher PDF
-                    <input
-                      type="file"
-                      accept="application/pdf"
-                      className="hidden"
-                      onChange={(e) => {
-                        const f = e.target.files?.[0];
-                        if (f) void importarPdf(slot, f);
-                      }}
-                    />
-                  </label>
-                  <button className="block w-full text-xs text-primary underline" onClick={() => setColando(slot)}>
-                    ou colar texto do pedido
-                  </button>
+                <div className="flex flex-wrap gap-2">
+                  {lista.map((o) => {
+                    const pct = pctEntregue(o);
+                    const sel = ordemSelId === o.id;
+                    return (
+                      <button
+                        key={o.id}
+                        onClick={() => setOrdemSelId(sel ? null : o.id)}
+                        className={`min-w-[104px] rounded-md border px-2 py-1 text-left transition-colors ${
+                          sel
+                            ? "border-primary bg-primary text-primary-foreground"
+                            : "border-border bg-background hover:bg-accent"
+                        }`}
+                      >
+                        <div className="text-sm font-bold leading-tight">Nº {o.numero}</div>
+                        <div className="text-[10px] opacity-80">
+                          {o.data} · {o.itens.length} itens
+                        </div>
+                        <div className="mt-1 h-1.5 w-full overflow-hidden rounded bg-muted">
+                          <div
+                            className={`h-full ${sel ? "bg-primary-foreground" : "bg-primary"}`}
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                        <div className="text-[10px] font-semibold">{fmt(pct, 0)}% entregue</div>
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </div>
           );
         })}
       </div>
+
 
       <div className="flex flex-wrap items-center gap-3">
         <div className="rounded-md bg-primary px-4 py-2 text-primary-foreground">
