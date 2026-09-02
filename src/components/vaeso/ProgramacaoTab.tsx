@@ -183,15 +183,18 @@ export function ProgramacaoTab({
     for (const m of dados.mpItens) mpKg[m.id] = 0;
     let quantidade = 0;
     let horas = 0;
+    let pallets = 0;
     for (const l of linhasVisiveis) {
       quantidade += l.quantidade;
       horas += l.horas ?? 0;
+      pallets += (l.pallet ?? 0) / 100;
       for (const m of dados.mpItens) {
         mpKg[m.id] = (mpKg[m.id] ?? 0) + (l.kgPorMp[m.descricao.trim().toUpperCase()] ?? 0);
       }
     }
-    return { quantidade, horas, mpKg };
+    return { quantidade, horas, pallets, mpKg };
   }, [linhasVisiveis, dados.mpItens]);
+
 
   const totaisEstrutura = useMemo(() => {
     let quantidade = 0;
