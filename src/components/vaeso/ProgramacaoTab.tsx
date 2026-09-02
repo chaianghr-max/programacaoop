@@ -25,6 +25,7 @@ import {
   type LinhaSku,
 } from "@/lib/vaeso/calc";
 import { extrairTextoPdf, parsePedidoLinhas, vincularItens } from "@/lib/vaeso/pdf";
+import { EMPRESAS_TINY, listarOrdensTiny, type OrdemTiny } from "@/lib/vaeso/tiny.functions";
 
 type Ordenacao = { campo: string; asc: boolean };
 
@@ -43,10 +44,66 @@ export function ProgramacaoTab({
   const [detalhe, setDetalhe] = useState<LinhaSku | null>(null);
   const [colando, setColando] = useState<number | null>(null);
   const [textoColado, setTextoColado] = useState("");
+  const [ordemSelId, setOrdemSelId] = useState<string | null>(null);
+
+  const qc = useQueryClient();
+  const buscarOrdens = useServerFn(listarOrdensTiny);
+  const {
+    data: ordensTiny,
+    isFetching: carregandoTiny,
+    error: erroTiny,
+  } = useQuery<OrdemTiny[]>({
+    queryKey: ["tiny-ordens"],
+    queryFn: () => buscarOrdens(),
+    staleTime: 60_000,
+  });
+
+  const { data: entregas } = useQuery({
+    queryKey: ["ordens-entregas"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("ordens_entregas").select("*");
+      if (error) throw error;
+      return data as Array<{ ordem_id: string; sku: string; entregue: boolean }>;
+    },
+  });
+
+  const entregueMap = useMemo(() => {
+    const m: Record<string, boolean> = {};
+    for (const e of entregas ?? []) if (e.entregue) m[`${e.ordem_id}|${e.sku.toUpperCase()}`] = true;
+    return m;
+  }, [entregas]);
+
+  const ordemSel = (ordensTiny ?? []).find((o) => o.id === ordemSelId) ?? null;
+
+  const pctEntregue = (o: OrdemTiny) => {
+    const total = o.itens.length;
+    if (!total) return 0;
+    const feitos = o.itens.filter((i) => entregueMap[`${o.id}|${i.codigo.toUpperCase()}`]).length;
+    return (feitos / total) * 100;
+  };
+
+  async function alternarEntrega(ordemId: string, sku: string, atual: boolean) {
+    if (atual) {
+      await supabase.from("ordens_entregas").delete().eq("ordem_id", ordemId).eq("sku", sku);
+    } else {
+      await supabase
+        .from("ordens_entregas")
+        .upsert({ ordem_id: ordemId, sku, entregue: true, updated_at: new Date().toISOString() });
+    }
+    void qc.invalidateQueries({ queryKey: ["ordens-entregas"] });
+  }
 
   const qtdePorSku = useMemo(() => {
     if (modo === "manual") return dados.manual;
     const map: Record<string, number> = {};
+    if (ordemSel) {
+      for (const item of ordemSel.itens) {
+        const k = item.codigo.trim().toUpperCase();
+        if (!k) continue;
+        map[k] = (map[k] ?? 0) + Number(item.quantidade || 0);
+      }
+      return map;
+    }
     for (const p of dados.pedidos) {
       for (const item of p.itens ?? []) {
         if (!item.sku) continue;
@@ -55,7 +112,8 @@ export function ProgramacaoTab({
       }
     }
     return map;
-  }, [modo, dados.manual, dados.pedidos]);
+  }, [modo, dados.manual, dados.pedidos, ordemSel]);
+
 
   const linhas = useMemo(
     () =>
