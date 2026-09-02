@@ -127,15 +127,6 @@ export function ProgramacaoTab({
     });
   }, [linhas, dados.mpItens]);
 
-  const itensSemSku = useMemo(() => {
-    const cadastrados = new Set(dados.skus.map((s) => s.sku.trim().toUpperCase()));
-    const out: { pedido: string; nome: string; sku: string | null; qtde: number }[] = [];
-    for (const p of dados.pedidos)
-      for (const item of p.itens ?? [])
-        if (!item.sku || !cadastrados.has(item.sku.trim().toUpperCase()))
-          out.push({ pedido: p.numero ?? `slot ${p.slot + 1}`, nome: item.nome, sku: item.sku, qtde: item.qtde });
-    return out;
-  }, [dados.pedidos, dados.skus]);
 
   async function importarPdf(slot: number, file: File) {
     try {
@@ -271,7 +262,7 @@ export function ProgramacaoTab({
         </div>
       </div>
 
-      <SecaoTitulo>Produtos por SKU</SecaoTitulo>
+      <SecaoTitulo>{estrutura ? "Estrutura de itens" : "Produtos por SKU"}</SecaoTitulo>
 
       <div className="flex flex-wrap items-center gap-2">
         <div className="inline-flex overflow-hidden rounded-md border border-border">
@@ -312,37 +303,59 @@ export function ProgramacaoTab({
           <table className="w-full text-xs">
             <thead className="bg-grid-head text-grid-head-foreground">
               <tr>
-                <th className="whitespace-nowrap px-2 py-1.5 text-left text-[11px] font-bold uppercase">Item</th>
-                <th className="whitespace-nowrap px-2 py-1.5 text-left text-[11px] font-bold uppercase">MP</th>
-                <th className="whitespace-nowrap px-2 py-1.5 text-left text-[11px] font-bold uppercase">Produto</th>
-                <th className="whitespace-nowrap px-2 py-1.5 text-left text-[11px] font-bold uppercase">Tipo</th>
-                <th className="whitespace-nowrap px-2 py-1.5 text-left text-[11px] font-bold uppercase">SKUs</th>
-                <th className="whitespace-nowrap px-2 py-1.5 text-right text-[11px] font-bold uppercase">Qtde programada</th>
-                <th className="whitespace-nowrap px-2 py-1.5 text-right text-[11px] font-bold uppercase">Peso (g)</th>
-                <th className="whitespace-nowrap px-2 py-1.5 text-right text-[11px] font-bold uppercase">Consumo MP (kg)</th>
-                <th className="whitespace-nowrap px-2 py-1.5 text-right text-[11px] font-bold uppercase">Cavidades</th>
-                <th className="whitespace-nowrap px-2 py-1.5 text-right text-[11px] font-bold uppercase">Ciclo (s)</th>
-                <th className="whitespace-nowrap px-2 py-1.5 text-right text-[11px] font-bold uppercase">Peças/h</th>
-                <th className="whitespace-nowrap px-2 py-1.5 text-right text-[11px] font-bold uppercase">Horas</th>
+                {[
+                  "Item",
+                  "MP",
+                  "Produto",
+                  "Tipo",
+                  "SKUs vinculados",
+                  "Quantidade programada",
+                  "Peso (g)",
+                  "Consumo MP (kg)",
+                  "Cavidades",
+                  "Ciclo (s)",
+                  "Peças/h",
+                  "Consumo hora",
+                ].map((h) => (
+                  <th
+                    key={h}
+                    className="whitespace-nowrap px-2 py-1.5 text-left text-[11px] font-semibold uppercase tracking-wide"
+                  >
+                    {h}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
               {linhasEstrutura.map((l) => (
-                <tr key={l.key} className="border-t border-border odd:bg-muted/30">
-                  <td className="px-2 py-0.5 font-medium">{l.item}</td>
-                  <td className="px-2 py-0.5">{l.mp}</td>
-                  <td className="px-2 py-0.5">{l.produtoNome}</td>
-                  <td className="px-2 py-0.5">{l.tipo}</td>
-                  <td className="max-w-[220px] truncate px-3 py-1 text-xs text-muted-foreground" title={l.skus.join(", ")}>
+                <tr key={l.key} className="border-t border-border hover:bg-muted/40">
+                  <td className="whitespace-nowrap px-2 py-1 font-bold">{l.item}</td>
+                  <td className="px-2 py-1">
+                    {l.mp ? (
+                      <span className="rounded bg-accent px-1.5 py-0.5 text-[10px] font-bold uppercase text-accent-foreground">
+                        {l.mp}
+                      </span>
+                    ) : (
+                      "-"
+                    )}
+                  </td>
+                  <td className="whitespace-nowrap px-2 py-1">{l.produtoNome}</td>
+                  <td className="whitespace-nowrap px-2 py-1 font-medium">{l.tipo}</td>
+                  <td
+                    className="max-w-[240px] truncate px-2 py-1 text-[11px] text-muted-foreground"
+                    title={l.skus.join(", ")}
+                  >
                     {l.skus.join(", ")}
                   </td>
-                  <td className="px-2 py-0.5 text-right">{fmtInt(l.quantidade)}</td>
-                  <td className="px-2 py-0.5 text-right">{fmt(l.pesoG)}</td>
-                  <td className="px-2 py-0.5 text-right">{fmt(l.kg)}</td>
-                  <td className="px-2 py-0.5 text-right">{fmt(l.cavidades, 0)}</td>
-                  <td className="px-2 py-0.5 text-right">{fmt(l.cicloS, 0)}</td>
-                  <td className="px-2 py-0.5 text-right">{fmt(l.ph, 0)}</td>
-                  <td className="px-2 py-0.5 text-right">{fmt(l.horas, 1)}</td>
+                  <td className="px-2 py-1">{fmtInt(l.quantidade)}</td>
+                  <td className="px-2 py-1">{fmt(l.pesoG)}</td>
+                  <td className="px-2 py-1 font-bold">{fmt(l.kg)}</td>
+                  <td className="px-2 py-1">{fmt(l.cavidades, 0)}</td>
+                  <td className="px-2 py-1">{fmt(l.cicloS, 0)}</td>
+                  <td className="px-2 py-1">{fmt(l.ph, 0)}</td>
+                  <td className="whitespace-nowrap px-2 py-1 font-bold">
+                    {l.horas ? `${fmt(l.horas, 1)} h` : "-"}
+                  </td>
                 </tr>
               ))}
               {linhasEstrutura.length === 0 && (
@@ -441,7 +454,7 @@ export function ProgramacaoTab({
         )}
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-4">
         <div className="overflow-hidden rounded-lg border border-border bg-card">
           <div className="bg-secondary px-3 py-2 text-sm font-semibold text-secondary-foreground">
             Matéria-prima necessária e valor de compra
@@ -466,35 +479,6 @@ export function ProgramacaoTab({
           </table>
         </div>
 
-        <div className="overflow-hidden rounded-lg border border-border bg-card">
-          <div className="bg-secondary px-3 py-2 text-sm font-semibold text-secondary-foreground">
-            Itens do PDF sem SKU reconhecido
-          </div>
-          {itensSemSku.length === 0 ? (
-            <div className="px-3 py-4 text-sm text-muted-foreground">Nenhum item pendente.</div>
-          ) : (
-            <table className="w-full text-xs">
-              <thead className="bg-muted text-xs text-muted-foreground">
-                <tr>
-                  <th className="px-2 py-0.5 text-left">Pedido</th>
-                  <th className="px-2 py-0.5 text-left">Item</th>
-                  <th className="px-2 py-0.5 text-left">SKU</th>
-                  <th className="px-2 py-0.5 text-right">Qtde</th>
-                </tr>
-              </thead>
-              <tbody>
-                {itensSemSku.map((i, idx) => (
-                  <tr key={idx} className="border-t border-border odd:bg-muted/30">
-                    <td className="px-2 py-0.5">{i.pedido}</td>
-                    <td className="px-2 py-0.5">{i.nome}</td>
-                    <td className="px-2 py-0.5">{i.sku ?? "—"}</td>
-                    <td className="px-2 py-0.5 text-right">{fmtInt(i.qtde)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
       </div>
 
       <Dialog open={!!detalhe} onOpenChange={(v) => !v && setDetalhe(null)}>

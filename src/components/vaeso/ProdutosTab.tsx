@@ -10,7 +10,7 @@ import { brl, consumoKg, fmt, num, pecasHora, resolveValorKg } from "@/lib/vaeso
 
 export function ProdutosTab({ dados, salvar }: { dados: Dados; salvar: Salvar }) {
   const [busca, setBusca] = useState("");
-  const [fechados, setFechados] = useState<Record<string, boolean>>({});
+  const [abertos, setAbertos] = useState<Record<string, boolean>>({});
   const termo = busca.trim().toLowerCase();
 
   const produtos = dados.produtos.filter(
@@ -72,13 +72,13 @@ export function ProdutosTab({ dados, salvar }: { dados: Dados; salvar: Salvar })
       <div className="space-y-4">
         {produtos.map((p) => {
           const comps = dados.componentes.filter((c) => c.produto_id === p.id);
-          const aberto = !fechados[p.id];
+          const aberto = !!abertos[p.id];
           const meio = Math.floor(Math.max(comps.length - 1, 0) / 2);
           return (
             <div key={p.id} className="overflow-hidden rounded-lg border border-border bg-card">
               <div className="flex flex-wrap items-center gap-3 border-b border-border px-3 py-2">
                 <button
-                  onClick={() => setFechados((s) => ({ ...s, [p.id]: aberto }))}
+                  onClick={() => setAbertos((s) => ({ ...s, [p.id]: !aberto }))}
                   className="text-muted-foreground"
                   aria-label={aberto ? "Recolher" : "Expandir"}
                 >
