@@ -117,6 +117,33 @@ export function ProgramacaoTab({
     return out.sort((a, b) => a.item.localeCompare(b.item));
   }, [linhas, dados.componentes, ocultarZerados, termo]);
 
+  const totaisVisiveis = useMemo(() => {
+    const mpKg: Record<string, number> = {};
+    for (const m of dados.mpItens) mpKg[m.id] = 0;
+    let quantidade = 0;
+    let horas = 0;
+    for (const l of linhasVisiveis) {
+      quantidade += l.quantidade;
+      horas += l.horas ?? 0;
+      for (const m of dados.mpItens) {
+        mpKg[m.id] = (mpKg[m.id] ?? 0) + (l.kgPorMp[m.descricao.trim().toUpperCase()] ?? 0);
+      }
+    }
+    return { quantidade, horas, mpKg };
+  }, [linhasVisiveis, dados.mpItens]);
+
+  const totaisEstrutura = useMemo(() => {
+    let quantidade = 0;
+    let kg = 0;
+    let horas = 0;
+    for (const l of linhasEstrutura) {
+      quantidade += l.quantidade;
+      kg += l.kg ?? 0;
+      horas += l.horas ?? 0;
+    }
+    return { quantidade, kg, horas };
+  }, [linhasEstrutura]);
+
   const mpTotais = useMemo(() => {
     const base = linhas.filter((l) => l.quantidade > 0);
     return dados.mpItens.map((m) => {
@@ -328,11 +355,11 @@ export function ProgramacaoTab({
             </thead>
             <tbody>
               {linhasEstrutura.map((l) => (
-                <tr key={l.key} className="border-t border-border hover:bg-muted/40">
+                <tr key={l.key} className="border-t border-border odd:bg-muted/30 hover:bg-muted/40">
                   <td className="whitespace-nowrap px-2 py-1 font-bold">{l.item}</td>
                   <td className="px-2 py-1">
                     {l.mp ? (
-                      <span className="rounded bg-accent px-1.5 py-0.5 text-[10px] font-bold uppercase text-accent-foreground">
+                      <span className="rounded bg-mp-head px-1.5 py-0.5 text-[10px] font-bold uppercase text-mp-head-foreground">
                         {l.mp}
                       </span>
                     ) : (
@@ -347,9 +374,9 @@ export function ProgramacaoTab({
                   >
                     {l.skus.join(", ")}
                   </td>
-                  <td className="px-2 py-1">{fmtInt(l.quantidade)}</td>
+                  <td className="px-2 py-1 font-bold">{fmtInt(l.quantidade)}</td>
                   <td className="px-2 py-1">{fmt(l.pesoG)}</td>
-                  <td className="px-2 py-1 font-bold">{fmt(l.kg)}</td>
+                  <td className="bg-mp-cell px-2 py-1 font-bold">{fmt(l.kg)}</td>
                   <td className="px-2 py-1">{fmt(l.cavidades, 0)}</td>
                   <td className="px-2 py-1">{fmt(l.cicloS, 0)}</td>
                   <td className="px-2 py-1">{fmt(l.ph, 0)}</td>
@@ -366,6 +393,20 @@ export function ProgramacaoTab({
                 </tr>
               )}
             </tbody>
+            {linhasEstrutura.length > 0 && (
+              <tfoot>
+                <tr className="border-t-2 border-border bg-secondary font-bold text-secondary-foreground">
+                  <td className="whitespace-nowrap px-2 py-1.5 uppercase" colSpan={5}>
+                    Total ({linhasEstrutura.length} itens)
+                  </td>
+                  <td className="px-2 py-1.5">{fmtInt(totaisEstrutura.quantidade)}</td>
+                  <td className="px-2 py-1.5" />
+                  <td className="bg-mp-cell px-2 py-1.5">{fmt(totaisEstrutura.kg)}</td>
+                  <td className="px-2 py-1.5" colSpan={3} />
+                  <td className="whitespace-nowrap px-2 py-1.5">{fmt(totaisEstrutura.horas, 1)} h</td>
+                </tr>
+              </tfoot>
+            )}
           </table>
         ) : (
           <table className="w-full text-xs">
@@ -404,12 +445,12 @@ export function ProgramacaoTab({
                   <td className="px-2 py-0.5">{l.produto?.tipo ?? "?"}</td>
                   <td className="px-2 py-0.5 font-medium">{l.sku.sku}</td>
                   <td className="px-2 py-0.5">{l.sku.descricao}</td>
-                  <td className="px-1 py-0.5 text-right">
+                  <td className="px-1 py-0.5 text-right font-bold">
                     {modo === "manual" ? (
                       <CellInput
                         type="number"
                         value={dados.manual[l.sku.sku] ?? 0}
-                        className="text-right"
+                        className="text-right font-bold"
                         onCommit={(v) =>
                           salvar(() =>
                             supabase
@@ -450,6 +491,24 @@ export function ProgramacaoTab({
                 </tr>
               )}
             </tbody>
+            {linhasVisiveis.length > 0 && (
+              <tfoot>
+                <tr className="border-t-2 border-border bg-secondary font-bold text-secondary-foreground">
+                  <td className="whitespace-nowrap px-2 py-1.5 uppercase" colSpan={3}>
+                    Total ({linhasVisiveis.length} itens)
+                  </td>
+                  <td className="px-2 py-1.5 text-right">{fmtInt(totaisVisiveis.quantidade)}</td>
+                  <td className="px-2 py-1.5" />
+                  {dados.mpItens.map((m) => (
+                    <td key={m.id} className="bg-mp-cell px-2 py-1.5 text-right">
+                      {totaisVisiveis.mpKg[m.id] ? fmt(totaisVisiveis.mpKg[m.id]) : "-"}
+                    </td>
+                  ))}
+                  <td className="px-2 py-1.5 text-right">{fmt(totaisVisiveis.horas, 1)}</td>
+                  <td className="px-2 py-1.5" />
+                </tr>
+              </tfoot>
+            )}
           </table>
         )}
       </div>
