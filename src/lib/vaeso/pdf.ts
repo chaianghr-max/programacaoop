@@ -33,13 +33,13 @@ export function parsePedidoLinhas(linhasBrutas: string[]): PedidoParseado {
   let acumulado: string[] = [];
 
   for (let i = 0; i < linhas.length; i++) {
-    const linha = linhas[i];
+    const linha = linhas[i] ?? "";
 
     const mNum = linha.match(/Ordem de Compra\s*N[ºo°]?\s*(\d+)/i);
-    if (mNum && !numero) numero = mNum[1];
+    if (mNum?.[1] && !numero) numero = mNum[1];
 
     const mData = linha.match(/^Data\s+(\d{2}\/\d{2}\/\d{4})/i);
-    if (mData && !data) data = mData[1];
+    if (mData?.[1] && !data) data = mData[1];
 
     if (
       !fornecedor &&
@@ -59,13 +59,13 @@ export function parsePedidoLinhas(linhasBrutas: string[]): PedidoParseado {
 
     const m = linha.match(ITEM_RE);
     if (m) {
-      const nome = [...acumulado, m[1]].join(" ").replace(/\s{2,}/g, " ").trim();
+      const nome = [...acumulado, m[1] ?? ""].join(" ").replace(/\s{2,}/g, " ").trim();
       acumulado = [];
-      const qtde = parseNum(m[3]);
+      const qtde = parseNum(m[3] ?? "0");
       let sku: string | null = null;
       const prox = linhas[i + 1] ?? "";
       const mSku = prox.match(/SKU:\s*([A-Za-z0-9._\-\/]+)/i);
-      if (mSku) sku = mSku[1];
+      if (mSku?.[1]) sku = mSku[1];
       itens.push({ nome, sku, qtde, tipo: null, produto_id: null });
       continue;
     }
@@ -121,7 +121,7 @@ export async function extrairTextoPdf(file: File): Promise<string[]> {
     }
     const ys = [...porY.keys()].sort((a, b) => b - a);
     for (const y of ys) {
-      const arr = porY.get(y)!.sort((a, b) => a.x - b.x);
+      const arr = (porY.get(y) ?? []).sort((a, b) => a.x - b.x);
       linhas.push(arr.map((a) => a.str).join(" "));
     }
   }
