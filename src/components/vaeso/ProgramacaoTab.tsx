@@ -432,7 +432,7 @@ export function ProgramacaoTab({
         )}
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-4">
         <div className="overflow-hidden rounded-lg border border-border bg-card">
           <div className="bg-secondary px-3 py-2 text-sm font-semibold text-secondary-foreground">
             Matéria-prima necessária e valor de compra
