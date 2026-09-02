@@ -1,5 +1,8 @@
-import { Boxes, Download, FileText, Upload, X } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { Boxes, Check, Download, FileText, RefreshCw } from "lucide-react";
 import { useMemo, useState } from "react";
+
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,6 +25,7 @@ import {
   type LinhaSku,
 } from "@/lib/vaeso/calc";
 import { extrairTextoPdf, parsePedidoLinhas, vincularItens } from "@/lib/vaeso/pdf";
+import { EMPRESAS_TINY, listarOrdensTiny, type OrdemTiny } from "@/lib/vaeso/tiny.functions";
 
 type Ordenacao = { campo: string; asc: boolean };
 
@@ -40,10 +44,66 @@ export function ProgramacaoTab({
   const [detalhe, setDetalhe] = useState<LinhaSku | null>(null);
   const [colando, setColando] = useState<number | null>(null);
   const [textoColado, setTextoColado] = useState("");
+  const [ordemSelId, setOrdemSelId] = useState<string | null>(null);
+
+  const qc = useQueryClient();
+  const buscarOrdens = useServerFn(listarOrdensTiny);
+  const {
+    data: ordensTiny,
+    isFetching: carregandoTiny,
+    error: erroTiny,
+  } = useQuery<OrdemTiny[]>({
+    queryKey: ["tiny-ordens"],
+    queryFn: () => buscarOrdens(),
+    staleTime: 60_000,
+  });
+
+  const { data: entregas } = useQuery({
+    queryKey: ["ordens-entregas"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("ordens_entregas").select("*");
+      if (error) throw error;
+      return data as Array<{ ordem_id: string; sku: string; entregue: boolean }>;
+    },
+  });
+
+  const entregueMap = useMemo(() => {
+    const m: Record<string, boolean> = {};
+    for (const e of entregas ?? []) if (e.entregue) m[`${e.ordem_id}|${e.sku.toUpperCase()}`] = true;
+    return m;
+  }, [entregas]);
+
+  const ordemSel = (ordensTiny ?? []).find((o) => o.id === ordemSelId) ?? null;
+
+  const pctEntregue = (o: OrdemTiny) => {
+    const total = o.itens.length;
+    if (!total) return 0;
+    const feitos = o.itens.filter((i) => entregueMap[`${o.id}|${i.codigo.toUpperCase()}`]).length;
+    return (feitos / total) * 100;
+  };
+
+  async function alternarEntrega(ordemId: string, sku: string, atual: boolean) {
+    if (atual) {
+      await supabase.from("ordens_entregas").delete().eq("ordem_id", ordemId).eq("sku", sku);
+    } else {
+      await supabase
+        .from("ordens_entregas")
+        .upsert({ ordem_id: ordemId, sku, entregue: true, updated_at: new Date().toISOString() });
+    }
+    void qc.invalidateQueries({ queryKey: ["ordens-entregas"] });
+  }
 
   const qtdePorSku = useMemo(() => {
     if (modo === "manual") return dados.manual;
     const map: Record<string, number> = {};
+    if (ordemSel) {
+      for (const item of ordemSel.itens) {
+        const k = item.codigo.trim().toUpperCase();
+        if (!k) continue;
+        map[k] = (map[k] ?? 0) + Number(item.quantidade || 0);
+      }
+      return map;
+    }
     for (const p of dados.pedidos) {
       for (const item of p.itens ?? []) {
         if (!item.sku) continue;
@@ -52,7 +112,8 @@ export function ProgramacaoTab({
       }
     }
     return map;
-  }, [modo, dados.manual, dados.pedidos]);
+  }, [modo, dados.manual, dados.pedidos, ordemSel]);
+
 
   const linhas = useMemo(
     () =>
@@ -122,15 +183,18 @@ export function ProgramacaoTab({
     for (const m of dados.mpItens) mpKg[m.id] = 0;
     let quantidade = 0;
     let horas = 0;
+    let pallets = 0;
     for (const l of linhasVisiveis) {
       quantidade += l.quantidade;
       horas += l.horas ?? 0;
+      pallets += (l.pallet ?? 0) / 100;
       for (const m of dados.mpItens) {
         mpKg[m.id] = (mpKg[m.id] ?? 0) + (l.kgPorMp[m.descricao.trim().toUpperCase()] ?? 0);
       }
     }
-    return { quantidade, horas, mpKg };
+    return { quantidade, horas, pallets, mpKg };
   }, [linhasVisiveis, dados.mpItens]);
+
 
   const totaisEstrutura = useMemo(() => {
     let quantidade = 0;
@@ -153,6 +217,16 @@ export function ProgramacaoTab({
       return { mp: m.descricao, kg, valor: valor !== null ? kg * valor : null };
     });
   }, [linhas, dados.mpItens]);
+
+  const mpTotalGeral = useMemo(
+    () => ({
+      kg: mpTotais.reduce((a, m) => a + m.kg, 0),
+      valor: mpTotais.reduce((a, m) => a + (m.valor ?? 0), 0),
+    }),
+    [mpTotais],
+  );
+
+
 
 
   async function importarPdf(slot: number, file: File) {
@@ -222,61 +296,87 @@ export function ProgramacaoTab({
 
   return (
     <div className="space-y-4">
-      <SecaoTitulo>Importar ordens de compra do Tiny (PDF) — até 3 simultâneas</SecaoTitulo>
+      <div className="flex items-center justify-between gap-2">
+        <SecaoTitulo>Ordens de compra em aberto (Tiny)</SecaoTitulo>
+        <div className="flex items-center gap-2">
+          <label className="cursor-pointer rounded-md border border-border px-2 py-1 text-[11px] hover:bg-accent">
+            importar PDF
+            <input
+              type="file"
+              accept="application/pdf"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void importarPdf(0, f);
+              }}
+            />
+          </label>
+          <button className="text-[11px] text-primary underline" onClick={() => setColando(0)}>
+            colar texto
+          </button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void qc.invalidateQueries({ queryKey: ["tiny-ordens"] })}
+          >
+            <RefreshCw className={`mr-1 size-4 ${carregandoTiny ? "animate-spin" : ""}`} /> Atualizar
+          </Button>
+        </div>
+      </div>
+
+      {erroTiny && (
+        <p className="text-xs text-destructive">Não foi possível carregar as ordens do Tiny.</p>
+      )}
+      {carregandoTiny && !ordensTiny && (
+        <p className="text-xs text-muted-foreground">Carregando ordens do Tiny...</p>
+      )}
+
       <div className="grid gap-3 md:grid-cols-3">
-        {[0, 1, 2].map((slot) => {
-          const pedido = dados.pedidos.find((p) => p.slot === slot);
+        {EMPRESAS_TINY.map((empresa) => {
+          const lista = (ordensTiny ?? []).filter((o) => o.empresa === empresa);
           return (
-            <div key={slot} className="rounded-lg border border-dashed border-border bg-card p-3">
-              {pedido ? (
-                <div className="space-y-1 text-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-primary">Pedido {pedido.numero ?? "—"}</span>
-                    <button
-                      aria-label="Remover pedido"
-                      onClick={() =>
-                        salvar(() => supabase.from("pedidos_importados").delete().eq("slot", slot))
-                      }
-                    >
-                      <X className="size-4 text-muted-foreground hover:text-destructive" />
-                    </button>
-                  </div>
-                  <div className="text-muted-foreground">{pedido.fornecedor ?? "Fornecedor —"}</div>
-                  <div className="text-muted-foreground">
-                    {pedido.data ?? "—"} · {(pedido.itens ?? []).length} itens
-                  </div>
-                  <button
-                    className="text-xs text-primary underline"
-                    onClick={() => setColando(slot)}
-                  >
-                    trocar / colar texto
-                  </button>
-                </div>
+            <div key={empresa} className="rounded-lg border border-border bg-card p-2">
+              <div className="mb-2 truncate text-[11px] font-bold uppercase tracking-wide text-primary" title={empresa}>
+                {empresa}
+              </div>
+              {lista.length === 0 ? (
+                <div className="px-1 py-2 text-[11px] text-muted-foreground">Sem ordens em aberto.</div>
               ) : (
-                <div className="space-y-2 text-center text-sm text-muted-foreground">
-                  <Upload className="mx-auto size-5" />
-                  <div>Ordem de Compra {slot + 1}</div>
-                  <label className="inline-block cursor-pointer rounded-md border border-border px-2 py-1 text-xs hover:bg-accent">
-                    escolher PDF
-                    <input
-                      type="file"
-                      accept="application/pdf"
-                      className="hidden"
-                      onChange={(e) => {
-                        const f = e.target.files?.[0];
-                        if (f) void importarPdf(slot, f);
-                      }}
-                    />
-                  </label>
-                  <button className="block w-full text-xs text-primary underline" onClick={() => setColando(slot)}>
-                    ou colar texto do pedido
-                  </button>
+                <div className="flex flex-wrap gap-2">
+                  {lista.map((o) => {
+                    const pct = pctEntregue(o);
+                    const sel = ordemSelId === o.id;
+                    return (
+                      <button
+                        key={o.id}
+                        onClick={() => setOrdemSelId(sel ? null : o.id)}
+                        className={`min-w-[104px] rounded-md border px-2 py-1 text-left transition-colors ${
+                          sel
+                            ? "border-primary bg-primary text-primary-foreground"
+                            : "border-border bg-background hover:bg-accent"
+                        }`}
+                      >
+                        <div className="text-sm font-bold leading-tight">Nº {o.numero}</div>
+                        <div className="text-[10px] opacity-80">
+                          {o.data} · {o.itens.length} itens
+                        </div>
+                        <div className="mt-1 h-1.5 w-full overflow-hidden rounded bg-muted">
+                          <div
+                            className={`h-full ${sel ? "bg-primary-foreground" : "bg-primary"}`}
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                        <div className="text-[10px] font-semibold">{fmt(pct, 0)}% entregue</div>
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </div>
           );
         })}
       </div>
+
 
       <div className="flex flex-wrap items-center gap-3">
         <div className="rounded-md bg-primary px-4 py-2 text-primary-foreground">
@@ -325,10 +425,11 @@ export function ProgramacaoTab({
         </Button>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-border bg-card">
+      <div className="max-h-[70vh] overflow-auto rounded-lg border border-border bg-card">
         {estrutura ? (
           <table className="w-full text-xs">
-            <thead className="bg-grid-head text-grid-head-foreground">
+            <thead className="sticky top-0 z-10 bg-grid-head text-grid-head-foreground shadow-[0_1px_0_var(--color-border)]">
+
               <tr>
                 {[
                   "Item",
@@ -410,18 +511,23 @@ export function ProgramacaoTab({
           </table>
         ) : (
           <table className="w-full text-xs">
-            <thead className="bg-grid-head text-grid-head-foreground">
+            <thead className="sticky top-0 z-10 bg-grid-head text-grid-head-foreground shadow-[0_1px_0_var(--color-border)]">
               <tr>
-                <th className="px-2 py-1" colSpan={5} />
+                <th className="bg-grid-head px-2 py-1" colSpan={ordemSel ? 6 : 5} />
                 <th
                   className="border-x border-border bg-mp-head px-2 py-1 text-center text-[11px] font-bold uppercase tracking-wide text-mp-head-foreground"
                   colSpan={dados.mpItens.length}
                 >
                   Consumo MP (kg)
                 </th>
-                <th className="px-2 py-1" colSpan={2} />
+                <th className="bg-grid-head px-2 py-1" colSpan={2} />
               </tr>
               <tr>
+                {ordemSel && (
+                  <th className="whitespace-nowrap bg-grid-head px-2 py-1.5 text-left text-[11px] font-bold uppercase">
+                    Entrega
+                  </th>
+                )}
                 {th("tipo", "Tipo")}
                 {th("sku", "SKU")}
                 {th("descricao", "Descrição")}
@@ -436,56 +542,82 @@ export function ProgramacaoTab({
                   </th>
                 ))}
                 {th("horas", "Horas máquina")}
-                <th className="px-3 py-2" />
+                <th className="bg-grid-head px-3 py-2" />
               </tr>
             </thead>
             <tbody>
-              {linhasVisiveis.map((l) => (
-                <tr key={l.sku.id} className="border-t border-border even:bg-mp-cell">
-                  <td className="px-2 py-0.5">{l.produto?.tipo ?? "?"}</td>
-                  <td className="px-2 py-0.5 font-medium">{l.sku.sku}</td>
-                  <td className="px-2 py-0.5">{l.sku.descricao}</td>
-                  <td className="px-1 py-0.5 text-right font-bold">
-                    {modo === "manual" ? (
-                      <CellInput
-                        type="number"
-                        value={dados.manual[l.sku.sku] ?? 0}
-                        className="text-right font-bold"
-                        onCommit={(v) =>
-                          salvar(() =>
-                            supabase
-                              .from("programacao_manual")
-                              .upsert({ sku: l.sku.sku, quantidade: num(v) ?? 0, updated_at: new Date().toISOString() }),
-                          )
-                        }
-                      />
-                    ) : (
-                      fmtInt(l.quantidade)
-                    )}
-                  </td>
-                  <td className="px-2 py-0.5 text-right">{l.produto ? fmt(l.pallet, 1) : "-"}</td>
-                  {dados.mpItens.map((m) => {
-                    const kg = l.kgPorMp[m.descricao.trim().toUpperCase()];
-                    return (
-                      <td key={m.id} className="bg-mp-cell px-2 py-0.5 text-right">
-                        {kg ? fmt(kg) : "-"}
+              {linhasVisiveis.map((l) => {
+                const chaveSku = l.sku.sku.trim().toUpperCase();
+                const entregue = !!(ordemSel && entregueMap[`${ordemSel.id}|${chaveSku}`]);
+                return (
+                  <tr
+                    key={l.sku.id}
+                    className={`border-t border-border ${
+                      entregue ? "bg-muted text-muted-foreground opacity-70" : "even:bg-mp-cell"
+                    }`}
+                  >
+                    {ordemSel && (
+                      <td className="px-2 py-0.5">
+                        <button
+                          onClick={() => void alternarEntrega(ordemSel.id, l.sku.sku, entregue)}
+                          className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-semibold uppercase ${
+                            entregue
+                              ? "border-primary bg-primary text-primary-foreground"
+                              : "border-border bg-background hover:bg-accent"
+                          }`}
+                        >
+                          <Check className="size-3" /> {entregue ? "Entregue" : "Entregar"}
+                        </button>
                       </td>
-                    );
-                  })}
-                  <td className="px-2 py-0.5 text-right">{fmt(l.horas, 1)}</td>
-                  <td className="px-2 py-0.5 text-right">
-                    <button
-                      className="rounded border border-border bg-background px-2 py-0.5 text-[11px] font-medium text-foreground hover:bg-accent"
-                      onClick={() => setDetalhe(l)}
-                    >
-                      ver cálculo
-                    </button>
-                  </td>
-                </tr>
-              ))}
+                    )}
+                    <td className="px-2 py-0.5">{l.produto?.tipo ?? "?"}</td>
+                    <td className="px-2 py-0.5 font-medium">{l.sku.sku}</td>
+                    <td className="px-2 py-0.5">{l.sku.descricao}</td>
+                    <td className="px-1 py-0.5 text-right font-bold">
+                      {modo === "manual" ? (
+                        <CellInput
+                          type="number"
+                          value={dados.manual[l.sku.sku] ?? 0}
+                          className="text-right font-bold"
+                          onCommit={(v) =>
+                            salvar(() =>
+                              supabase
+                                .from("programacao_manual")
+                                .upsert({ sku: l.sku.sku, quantidade: num(v) ?? 0, updated_at: new Date().toISOString() }),
+                            )
+                          }
+                        />
+                      ) : (
+                        fmtInt(l.quantidade)
+                      )}
+                    </td>
+                    <td className="px-2 py-0.5 text-right">{l.produto ? fmt(l.pallet, 1) : "-"}</td>
+                    {dados.mpItens.map((m) => {
+                      const kg = l.kgPorMp[m.descricao.trim().toUpperCase()];
+                      return (
+                        <td key={m.id} className="bg-mp-cell px-2 py-0.5 text-right">
+                          {kg ? fmt(kg) : "-"}
+                        </td>
+                      );
+                    })}
+                    <td className="px-2 py-0.5 text-right">{fmt(l.horas, 1)}</td>
+                    <td className="px-2 py-0.5 text-right">
+                      <button
+                        className="rounded border border-border bg-background px-2 py-0.5 text-[11px] font-medium text-foreground hover:bg-accent"
+                        onClick={() => setDetalhe(l)}
+                      >
+                        ver cálculo
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
               {linhasVisiveis.length === 0 && (
                 <tr>
-                  <td colSpan={6 + dados.mpItens.length} className="px-3 py-6 text-center text-muted-foreground">
+                  <td
+                    colSpan={7 + dados.mpItens.length + (ordemSel ? 1 : 0)}
+                    className="px-3 py-6 text-center text-muted-foreground"
+                  >
                     Nada para mostrar.
                   </td>
                 </tr>
@@ -494,11 +626,13 @@ export function ProgramacaoTab({
             {linhasVisiveis.length > 0 && (
               <tfoot>
                 <tr className="border-t-2 border-border bg-secondary font-bold text-secondary-foreground">
-                  <td className="whitespace-nowrap px-2 py-1.5 uppercase" colSpan={3}>
+                  <td className="whitespace-nowrap px-2 py-1.5 uppercase" colSpan={ordemSel ? 4 : 3}>
                     Total ({linhasVisiveis.length} itens)
                   </td>
                   <td className="px-2 py-1.5 text-right">{fmtInt(totaisVisiveis.quantidade)}</td>
-                  <td className="px-2 py-1.5" />
+                  <td className="whitespace-nowrap px-2 py-1.5 text-right">
+                    {fmt(totaisVisiveis.pallets, 2)} pallets
+                  </td>
                   {dados.mpItens.map((m) => (
                     <td key={m.id} className="bg-mp-cell px-2 py-1.5 text-right">
                       {totaisVisiveis.mpKg[m.id] ? fmt(totaisVisiveis.mpKg[m.id]) : "-"}
@@ -510,6 +644,7 @@ export function ProgramacaoTab({
               </tfoot>
             )}
           </table>
+
         )}
       </div>
 
@@ -535,6 +670,14 @@ export function ProgramacaoTab({
                 </tr>
               ))}
             </tbody>
+            <tfoot>
+              <tr className="border-t-2 border-border bg-secondary font-bold text-secondary-foreground">
+                <td className="px-2 py-1.5 uppercase">Total geral</td>
+                <td className="px-2 py-1.5 text-right">{fmt(mpTotalGeral.kg)}</td>
+                <td className="px-2 py-1.5 text-right">{brl(mpTotalGeral.valor)}</td>
+              </tr>
+            </tfoot>
+
           </table>
         </div>
 
