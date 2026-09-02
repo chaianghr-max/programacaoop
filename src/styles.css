@@ -59,6 +59,17 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  --color-mp-head: var(--mp-head);
+  --color-mp-head-foreground: var(--mp-head-foreground);
+  --color-mp-cell: var(--mp-cell);
+  --color-proc-head: var(--proc-head);
+  --color-proc-head-foreground: var(--proc-head-foreground);
+  --color-proc-cell: var(--proc-cell);
+  --color-emb-head: var(--emb-head);
+  --color-emb-head-foreground: var(--emb-head-foreground);
+  --color-emb-cell: var(--emb-cell);
+  --color-grid-head: var(--grid-head);
+  --color-grid-head-foreground: var(--grid-head-foreground);
 }
 
 :root {
@@ -94,6 +105,17 @@
   --sidebar-accent: oklch(0.94 0.03 152);
   --sidebar-accent-foreground: oklch(0.33 0.08 152);
   --sidebar-border: oklch(0.9 0.012 152);
+    --mp-head: oklch(0.955 0.035 150);
+  --mp-head-foreground: oklch(0.45 0.12 152);
+  --mp-cell: oklch(0.985 0.012 150);
+  --proc-head: oklch(0.945 0.03 250);
+  --proc-head-foreground: oklch(0.47 0.14 258);
+  --proc-cell: oklch(0.98 0.012 250);
+  --emb-head: oklch(0.955 0.045 75);
+  --emb-head-foreground: oklch(0.55 0.14 55);
+  --emb-cell: oklch(0.985 0.02 75);
+  --grid-head: oklch(0.96 0.02 150);
+  --grid-head-foreground: oklch(0.35 0.06 152);
   --sidebar-ring: oklch(0.616 0.156 152.5);
 }
 

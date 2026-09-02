@@ -194,7 +194,7 @@ export function ProgramacaoTab({
 
   const th = (campo: string, label: string) => (
     <th
-      className="cursor-pointer select-none px-3 py-2 text-left font-semibold"
+      className="cursor-pointer select-none whitespace-nowrap px-2 py-1.5 text-left text-[11px] font-bold uppercase"
       onClick={() => setOrdem((o) => ({ campo, asc: o.campo === campo ? !o.asc : true }))}
     >
       {label}
@@ -203,7 +203,8 @@ export function ProgramacaoTab({
   );
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
+      <SecaoTitulo>Importar ordens de compra do Tiny (PDF) — até 3 simultâneas</SecaoTitulo>
       <div className="grid gap-3 md:grid-cols-3">
         {[0, 1, 2].map((slot) => {
           const pedido = dados.pedidos.find((p) => p.slot === slot);
@@ -259,16 +260,18 @@ export function ProgramacaoTab({
         })}
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        <div className="rounded-lg border border-border bg-primary/5 p-4">
-          <div className="text-xs uppercase tracking-wide text-muted-foreground">Total de horas de máquina</div>
-          <div className="text-3xl font-bold text-primary">{fmt(totalHoras, 1)} h</div>
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="rounded-md bg-primary px-4 py-2 text-primary-foreground">
+          <div className="text-xl font-bold leading-tight">{fmt(totalHoras, 1)} h</div>
+          <div className="text-[10px] uppercase tracking-wide opacity-90">Total de horas de máquina</div>
         </div>
-        <div className="rounded-lg border border-border bg-primary/5 p-4">
-          <div className="text-xs uppercase tracking-wide text-muted-foreground">Custo estimado de matéria-prima</div>
-          <div className="text-3xl font-bold text-primary">{brl(totalCusto)}</div>
+        <div className="rounded-md bg-primary px-4 py-2 text-primary-foreground">
+          <div className="text-xl font-bold leading-tight">{brl(totalCusto)}</div>
+          <div className="text-[10px] uppercase tracking-wide opacity-90">Custo estimado de matéria-prima</div>
         </div>
       </div>
+
+      <SecaoTitulo>Produtos por SKU</SecaoTitulo>
 
       <div className="flex flex-wrap items-center gap-2">
         <div className="inline-flex overflow-hidden rounded-md border border-border">
@@ -306,40 +309,40 @@ export function ProgramacaoTab({
 
       <div className="overflow-x-auto rounded-lg border border-border bg-card">
         {estrutura ? (
-          <table className="w-full text-sm">
-            <thead className="bg-secondary text-secondary-foreground">
+          <table className="w-full text-xs">
+            <thead className="bg-grid-head text-grid-head-foreground">
               <tr>
-                <th className="px-3 py-2 text-left font-semibold">Item</th>
-                <th className="px-3 py-2 text-left font-semibold">MP</th>
-                <th className="px-3 py-2 text-left font-semibold">Produto</th>
-                <th className="px-3 py-2 text-left font-semibold">Tipo</th>
-                <th className="px-3 py-2 text-left font-semibold">SKUs</th>
-                <th className="px-3 py-2 text-right font-semibold">Qtde programada</th>
-                <th className="px-3 py-2 text-right font-semibold">Peso (g)</th>
-                <th className="px-3 py-2 text-right font-semibold">Consumo MP (kg)</th>
-                <th className="px-3 py-2 text-right font-semibold">Cavidades</th>
-                <th className="px-3 py-2 text-right font-semibold">Ciclo (s)</th>
-                <th className="px-3 py-2 text-right font-semibold">Peças/h</th>
-                <th className="px-3 py-2 text-right font-semibold">Horas</th>
+                <th className="whitespace-nowrap px-2 py-1.5 text-left text-[11px] font-bold uppercase">Item</th>
+                <th className="whitespace-nowrap px-2 py-1.5 text-left text-[11px] font-bold uppercase">MP</th>
+                <th className="whitespace-nowrap px-2 py-1.5 text-left text-[11px] font-bold uppercase">Produto</th>
+                <th className="whitespace-nowrap px-2 py-1.5 text-left text-[11px] font-bold uppercase">Tipo</th>
+                <th className="whitespace-nowrap px-2 py-1.5 text-left text-[11px] font-bold uppercase">SKUs</th>
+                <th className="whitespace-nowrap px-2 py-1.5 text-right text-[11px] font-bold uppercase">Qtde programada</th>
+                <th className="whitespace-nowrap px-2 py-1.5 text-right text-[11px] font-bold uppercase">Peso (g)</th>
+                <th className="whitespace-nowrap px-2 py-1.5 text-right text-[11px] font-bold uppercase">Consumo MP (kg)</th>
+                <th className="whitespace-nowrap px-2 py-1.5 text-right text-[11px] font-bold uppercase">Cavidades</th>
+                <th className="whitespace-nowrap px-2 py-1.5 text-right text-[11px] font-bold uppercase">Ciclo (s)</th>
+                <th className="whitespace-nowrap px-2 py-1.5 text-right text-[11px] font-bold uppercase">Peças/h</th>
+                <th className="whitespace-nowrap px-2 py-1.5 text-right text-[11px] font-bold uppercase">Horas</th>
               </tr>
             </thead>
             <tbody>
               {linhasEstrutura.map((l) => (
-                <tr key={l.key} className="border-t border-border">
-                  <td className="px-3 py-1 font-medium">{l.item}</td>
-                  <td className="px-3 py-1">{l.mp}</td>
-                  <td className="px-3 py-1">{l.produtoNome}</td>
-                  <td className="px-3 py-1">{l.tipo}</td>
+                <tr key={l.key} className="border-t border-border odd:bg-muted/30">
+                  <td className="px-2 py-0.5 font-medium">{l.item}</td>
+                  <td className="px-2 py-0.5">{l.mp}</td>
+                  <td className="px-2 py-0.5">{l.produtoNome}</td>
+                  <td className="px-2 py-0.5">{l.tipo}</td>
                   <td className="max-w-[220px] truncate px-3 py-1 text-xs text-muted-foreground" title={l.skus.join(", ")}>
                     {l.skus.join(", ")}
                   </td>
-                  <td className="px-3 py-1 text-right">{fmtInt(l.quantidade)}</td>
-                  <td className="px-3 py-1 text-right">{fmt(l.pesoG)}</td>
-                  <td className="px-3 py-1 text-right">{fmt(l.kg)}</td>
-                  <td className="px-3 py-1 text-right">{fmt(l.cavidades, 0)}</td>
-                  <td className="px-3 py-1 text-right">{fmt(l.cicloS, 0)}</td>
-                  <td className="px-3 py-1 text-right">{fmt(l.ph, 0)}</td>
-                  <td className="px-3 py-1 text-right">{fmt(l.horas, 1)}</td>
+                  <td className="px-2 py-0.5 text-right">{fmtInt(l.quantidade)}</td>
+                  <td className="px-2 py-0.5 text-right">{fmt(l.pesoG)}</td>
+                  <td className="px-2 py-0.5 text-right">{fmt(l.kg)}</td>
+                  <td className="px-2 py-0.5 text-right">{fmt(l.cavidades, 0)}</td>
+                  <td className="px-2 py-0.5 text-right">{fmt(l.cicloS, 0)}</td>
+                  <td className="px-2 py-0.5 text-right">{fmt(l.ph, 0)}</td>
+                  <td className="px-2 py-0.5 text-right">{fmt(l.horas, 1)}</td>
                 </tr>
               ))}
               {linhasEstrutura.length === 0 && (
@@ -352,8 +355,18 @@ export function ProgramacaoTab({
             </tbody>
           </table>
         ) : (
-          <table className="w-full text-sm">
-            <thead className="bg-secondary text-secondary-foreground">
+          <table className="w-full text-xs">
+            <thead className="bg-grid-head text-grid-head-foreground">
+              <tr>
+                <th className="px-2 py-1" colSpan={5} />
+                <th
+                  className="border-x border-border bg-mp-head px-2 py-1 text-center text-[11px] font-bold uppercase tracking-wide text-mp-head-foreground"
+                  colSpan={dados.mpItens.length}
+                >
+                  Consumo MP (kg)
+                </th>
+                <th className="px-2 py-1" colSpan={2} />
+              </tr>
               <tr>
                 {th("tipo", "Tipo")}
                 {th("sku", "SKU")}
@@ -361,8 +374,11 @@ export function ProgramacaoTab({
                 {th("quantidade", "Quantidade")}
                 {th("pallet", "% Pallet")}
                 {dados.mpItens.map((m) => (
-                  <th key={m.id} className="px-3 py-2 text-right font-semibold">
-                    {m.descricao} (kg)
+                  <th
+                    key={m.id}
+                    className="whitespace-nowrap bg-mp-head px-2 py-1.5 text-right text-[11px] font-bold uppercase text-mp-head-foreground"
+                  >
+                    {m.descricao}
                   </th>
                 ))}
                 {th("horas", "Horas máquina")}
@@ -371,11 +387,11 @@ export function ProgramacaoTab({
             </thead>
             <tbody>
               {linhasVisiveis.map((l) => (
-                <tr key={l.sku.id} className="border-t border-border">
-                  <td className="px-3 py-1">{l.produto?.tipo ?? "?"}</td>
-                  <td className="px-3 py-1 font-medium">{l.sku.sku}</td>
-                  <td className="px-3 py-1">{l.sku.descricao}</td>
-                  <td className="px-1 py-1 text-right">
+                <tr key={l.sku.id} className="border-t border-border odd:bg-muted/30">
+                  <td className="px-2 py-0.5">{l.produto?.tipo ?? "?"}</td>
+                  <td className="px-2 py-0.5 font-medium">{l.sku.sku}</td>
+                  <td className="px-2 py-0.5">{l.sku.descricao}</td>
+                  <td className="px-1 py-0.5 text-right">
                     {modo === "manual" ? (
                       <CellInput
                         type="number"
@@ -393,18 +409,21 @@ export function ProgramacaoTab({
                       fmtInt(l.quantidade)
                     )}
                   </td>
-                  <td className="px-3 py-1 text-right">{l.produto ? fmt(l.pallet, 1) : "-"}</td>
+                  <td className="px-2 py-0.5 text-right">{l.produto ? fmt(l.pallet, 1) : "-"}</td>
                   {dados.mpItens.map((m) => {
                     const kg = l.kgPorMp[m.descricao.trim().toUpperCase()];
                     return (
-                      <td key={m.id} className="px-3 py-1 text-right">
+                      <td key={m.id} className="bg-mp-cell px-2 py-0.5 text-right">
                         {kg ? fmt(kg) : "-"}
                       </td>
                     );
                   })}
-                  <td className="px-3 py-1 text-right">{fmt(l.horas, 1)}</td>
-                  <td className="px-3 py-1 text-right">
-                    <button className="text-xs text-primary underline" onClick={() => setDetalhe(l)}>
+                  <td className="px-2 py-0.5 text-right">{fmt(l.horas, 1)}</td>
+                  <td className="px-2 py-0.5 text-right">
+                    <button
+                      className="rounded border border-border bg-background px-2 py-0.5 text-[11px] font-medium text-foreground hover:bg-accent"
+                      onClick={() => setDetalhe(l)}
+                    >
                       ver cálculo
                     </button>
                   </td>
@@ -427,20 +446,20 @@ export function ProgramacaoTab({
           <div className="bg-secondary px-3 py-2 text-sm font-semibold text-secondary-foreground">
             Matéria-prima necessária e valor de compra
           </div>
-          <table className="w-full text-sm">
+          <table className="w-full text-xs">
             <thead className="bg-muted text-xs text-muted-foreground">
               <tr>
-                <th className="px-3 py-1 text-left">Matéria-prima</th>
-                <th className="px-3 py-1 text-right">Total (kg)</th>
-                <th className="px-3 py-1 text-right">Valor de compra</th>
+                <th className="px-2 py-0.5 text-left">Matéria-prima</th>
+                <th className="px-2 py-0.5 text-right">Total (kg)</th>
+                <th className="px-2 py-0.5 text-right">Valor de compra</th>
               </tr>
             </thead>
             <tbody>
               {mpTotais.map((m) => (
-                <tr key={m.mp} className="border-t border-border">
-                  <td className="px-3 py-1">{m.mp}</td>
-                  <td className="px-3 py-1 text-right">{fmt(m.kg)}</td>
-                  <td className="px-3 py-1 text-right">{brl(m.valor)}</td>
+                <tr key={m.mp} className="border-t border-border odd:bg-muted/30">
+                  <td className="px-2 py-0.5">{m.mp}</td>
+                  <td className="px-2 py-0.5 text-right">{fmt(m.kg)}</td>
+                  <td className="px-2 py-0.5 text-right">{brl(m.valor)}</td>
                 </tr>
               ))}
             </tbody>
@@ -454,22 +473,22 @@ export function ProgramacaoTab({
           {itensSemSku.length === 0 ? (
             <div className="px-3 py-4 text-sm text-muted-foreground">Nenhum item pendente.</div>
           ) : (
-            <table className="w-full text-sm">
+            <table className="w-full text-xs">
               <thead className="bg-muted text-xs text-muted-foreground">
                 <tr>
-                  <th className="px-3 py-1 text-left">Pedido</th>
-                  <th className="px-3 py-1 text-left">Item</th>
-                  <th className="px-3 py-1 text-left">SKU</th>
-                  <th className="px-3 py-1 text-right">Qtde</th>
+                  <th className="px-2 py-0.5 text-left">Pedido</th>
+                  <th className="px-2 py-0.5 text-left">Item</th>
+                  <th className="px-2 py-0.5 text-left">SKU</th>
+                  <th className="px-2 py-0.5 text-right">Qtde</th>
                 </tr>
               </thead>
               <tbody>
                 {itensSemSku.map((i, idx) => (
-                  <tr key={idx} className="border-t border-border">
-                    <td className="px-3 py-1">{i.pedido}</td>
-                    <td className="px-3 py-1">{i.nome}</td>
-                    <td className="px-3 py-1">{i.sku ?? "—"}</td>
-                    <td className="px-3 py-1 text-right">{fmtInt(i.qtde)}</td>
+                  <tr key={idx} className="border-t border-border odd:bg-muted/30">
+                    <td className="px-2 py-0.5">{i.pedido}</td>
+                    <td className="px-2 py-0.5">{i.nome}</td>
+                    <td className="px-2 py-0.5">{i.sku ?? "—"}</td>
+                    <td className="px-2 py-0.5 text-right">{fmtInt(i.qtde)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -492,7 +511,7 @@ export function ProgramacaoTab({
                 completas): <strong>{fmtInt(detalhe.sugerida)}</strong> · % Pallet:{" "}
                 <strong>{fmt(detalhe.pallet, 1)}%</strong>
               </div>
-              <table className="w-full text-sm">
+              <table className="w-full text-xs">
                 <thead className="bg-muted text-xs text-muted-foreground">
                   <tr>
                     <th className="px-2 py-1 text-left">Componente</th>
@@ -507,7 +526,7 @@ export function ProgramacaoTab({
                 </thead>
                 <tbody>
                   {detalhe.componentes.map((c) => (
-                    <tr key={c.comp.id} className="border-t border-border">
+                    <tr key={c.comp.id} className="border-t border-border odd:bg-muted/30">
                       <td className="px-2 py-1">{c.comp.descricao}</td>
                       <td className="px-2 py-1">{c.comp.mp}</td>
                       <td className="px-2 py-1 text-right">{fmt(c.comp.peso_g)}</td>
@@ -559,6 +578,15 @@ export function ProgramacaoTab({
           </Button>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+function SecaoTitulo({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide text-primary">
+      <span className="size-2 rounded-[2px] bg-primary" />
+      {children}
     </div>
   );
 }
