@@ -137,12 +137,19 @@ export function ProgramacaoTab({
   );
   const temSelecao = ordensSel.length > 0;
 
-  const pctEntregue = (o: OrdemPainel) => {
-    const total = o.itens.length;
-    if (!total) return 0;
-    const feitos = o.itens.filter((i) => entregueMap[`${o.id}|${i.codigo.toUpperCase()}`]).length;
-    return (feitos / total) * 100;
+  // quantidade entregue de um item de uma ordem (-1 = legado "entregue total")
+  const qtdeEntregueItem = (ordemId: string, codigo: string, qtde: number) => {
+    const v = entregueMap[`${ordemId}|${codigo.trim().toUpperCase()}`] ?? 0;
+    return v === -1 ? qtde : Math.min(v, qtde);
   };
+
+  const pctEntregue = (o: OrdemPainel) => {
+    const total = o.itens.reduce((s, i) => s + Number(i.quantidade || 0), 0);
+    if (!total) return 0;
+    const feitos = o.itens.reduce((s, i) => s + qtdeEntregueItem(o.id, i.codigo, i.quantidade), 0);
+    return Math.min(100, (feitos / total) * 100);
+  };
+
 
   function alternarOrdem(id: string) {
     setSelecionadas((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
