@@ -931,41 +931,41 @@ export function ProgramacaoTab({
                 <strong>{fmt(detalhe.pallet, 1)}%</strong>
               </div>
               <div className="overflow-auto rounded-md border border-border">
-                <table className="min-w-[640px] text-xs">
+                <table className="min-w-max whitespace-nowrap text-xs">
                   <thead className="bg-muted text-xs text-muted-foreground">
                     <tr>
-                      <th className="px-2 py-1 text-left">Componente</th>
-                      <th className="px-2 py-1 text-left">MP</th>
-                      <th className="px-2 py-1 text-right">Peso (g)</th>
-                      <th className="px-2 py-1 text-right">Consumo (kg)</th>
-                      <th className="px-2 py-1 text-right">R$/kg</th>
-                      <th className="px-2 py-1 text-right">Custo</th>
-                      <th className="px-2 py-1 text-right">Peças/h</th>
-                      <th className="px-2 py-1 text-right">Horas</th>
+                      <th className="whitespace-nowrap px-2 py-1 text-left">Componente</th>
+                      <th className="whitespace-nowrap px-2 py-1 text-left">MP</th>
+                      <th className="whitespace-nowrap px-2 py-1 text-right">Peso (g)</th>
+                      <th className="whitespace-nowrap px-2 py-1 text-right">Consumo (kg)</th>
+                      <th className="whitespace-nowrap px-2 py-1 text-right">R$/kg</th>
+                      <th className="whitespace-nowrap px-2 py-1 text-right">Custo</th>
+                      <th className="whitespace-nowrap px-2 py-1 text-right">Peças/h</th>
+                      <th className="whitespace-nowrap px-2 py-1 text-right">Horas</th>
                     </tr>
                   </thead>
                   <tbody>
                     {detalhe.componentes.map((c) => (
                       <tr key={c.comp.id} className="border-t border-border odd:bg-muted/30">
-                        <td className="px-2 py-1">{c.comp.descricao}</td>
-                        <td className="px-2 py-1">{c.comp.mp}</td>
-                        <td className="px-2 py-1 text-right">{fmt(c.comp.peso_g)}</td>
-                        <td className="px-2 py-1 text-right">{fmt(c.kg)}</td>
-                        <td className="px-2 py-1 text-right">{fmt(c.valorKg)}</td>
-                        <td className="px-2 py-1 text-right">{brl(c.custo)}</td>
-                        <td className="px-2 py-1 text-right">{fmt(c.ph, 0)}</td>
-                        <td className="px-2 py-1 text-right">{fmt(c.horas, 1)}</td>
+                        <td className="whitespace-nowrap px-2 py-1">{c.comp.descricao}</td>
+                        <td className="whitespace-nowrap px-2 py-1">{c.comp.mp}</td>
+                        <td className="whitespace-nowrap px-2 py-1 text-right">{fmt(c.comp.peso_g)}</td>
+                        <td className="whitespace-nowrap px-2 py-1 text-right">{fmt(c.kg)}</td>
+                        <td className="whitespace-nowrap px-2 py-1 text-right">{fmt(c.valorKg)}</td>
+                        <td className="whitespace-nowrap px-2 py-1 text-right">{brl(c.custo)}</td>
+                        <td className="whitespace-nowrap px-2 py-1 text-right">{fmt(c.ph, 0)}</td>
+                        <td className="whitespace-nowrap px-2 py-1 text-right">{fmt(c.horas, 1)}</td>
                       </tr>
                     ))}
                   </tbody>
                   <tfoot>
                     <tr className="border-t border-border font-semibold">
-                      <td className="px-2 py-1" colSpan={5}>
+                      <td className="whitespace-nowrap px-2 py-1" colSpan={5}>
                         Total
                       </td>
-                      <td className="px-2 py-1 text-right">{brl(detalhe.custo)}</td>
+                      <td className="whitespace-nowrap px-2 py-1 text-right">{brl(detalhe.custo)}</td>
                       <td />
-                      <td className="px-2 py-1 text-right">{fmt(detalhe.horas, 1)}</td>
+                      <td className="whitespace-nowrap px-2 py-1 text-right">{fmt(detalhe.horas, 1)}</td>
                     </tr>
                   </tfoot>
                 </table>
