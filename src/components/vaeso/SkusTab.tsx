@@ -24,8 +24,15 @@ export function SkusTab({
       s.descricao.toLowerCase().includes(termo),
   );
 
-  const atualizar = (id: string, campo: string, valor: string) =>
+  const atualizar = (id: string, campo: string, valor: string | null) =>
     salvar(() => supabase.from("skus").update({ [campo]: valor } as never).eq("id", id));
+
+  const opcoesComponentes = dados.produtos
+    .map((p) => ({
+      produto: p,
+      comps: dados.componentes.filter((c) => c.produto_id === p.id),
+    }))
+    .filter((g) => g.comps.length > 0);
 
   return (
     <div className="space-y-4">
