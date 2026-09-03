@@ -80,15 +80,25 @@ export function ProgramacaoTab({
     queryFn: async () => {
       const { data, error } = await supabase.from("ordens_entregas").select("*");
       if (error) throw error;
-      return data as Array<{ ordem_id: string; sku: string; entregue: boolean }>;
+      return data as Array<{
+        ordem_id: string;
+        sku: string;
+        entregue: boolean;
+        qtde_entregue: number | null;
+      }>;
     },
   });
 
+  // quantidade já entregue por ordem+sku
   const entregueMap = useMemo(() => {
-    const m: Record<string, boolean> = {};
-    for (const e of entregas ?? []) if (e.entregue) m[`${e.ordem_id}|${e.sku.toUpperCase()}`] = true;
+    const m: Record<string, number> = {};
+    for (const e of entregas ?? []) {
+      const q = Number(e.qtde_entregue ?? 0);
+      m[`${e.ordem_id}|${e.sku.toUpperCase()}`] = q > 0 ? q : e.entregue ? -1 : 0;
+    }
     return m;
   }, [entregas]);
+
 
   type OrdemPainel = {
     id: string;
@@ -127,12 +137,19 @@ export function ProgramacaoTab({
   );
   const temSelecao = ordensSel.length > 0;
 
-  const pctEntregue = (o: OrdemPainel) => {
-    const total = o.itens.length;
-    if (!total) return 0;
-    const feitos = o.itens.filter((i) => entregueMap[`${o.id}|${i.codigo.toUpperCase()}`]).length;
-    return (feitos / total) * 100;
+  // quantidade entregue de um item de uma ordem (-1 = legado "entregue total")
+  const qtdeEntregueItem = (ordemId: string, codigo: string, qtde: number) => {
+    const v = entregueMap[`${ordemId}|${codigo.trim().toUpperCase()}`] ?? 0;
+    return v === -1 ? qtde : Math.min(v, qtde);
   };
+
+  const pctEntregue = (o: OrdemPainel) => {
+    const total = o.itens.reduce((s, i) => s + Number(i.quantidade || 0), 0);
+    if (!total) return 0;
+    const feitos = o.itens.reduce((s, i) => s + qtdeEntregueItem(o.id, i.codigo, i.quantidade), 0);
+    return Math.min(100, (feitos / total) * 100);
+  };
+
 
   function alternarOrdem(id: string) {
     setSelecionadas((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
@@ -156,20 +173,30 @@ export function ProgramacaoTab({
   }
 
 
-  async function alternarEntrega(sku: string, entregue: boolean) {
+  // grava a quantidade entregue de um SKU, distribuindo entre as ordens selecionadas
+  async function definirEntrega(sku: string, quantidade: number) {
     const chave = sku.trim().toUpperCase();
     const alvo = ordensSel.filter((o) => o.itens.some((i) => i.codigo.trim().toUpperCase() === chave));
+    let restante = Math.max(0, quantidade);
     for (const o of alvo) {
-      if (entregue) {
-        await supabase.from("ordens_entregas").delete().eq("ordem_id", o.id).eq("sku", sku);
+      const item = o.itens.find((i) => i.codigo.trim().toUpperCase() === chave)!;
+      const aplicar = Math.min(restante, Number(item.quantidade || 0));
+      restante -= aplicar;
+      if (aplicar <= 0) {
+        await supabase.from("ordens_entregas").delete().eq("ordem_id", o.id).eq("sku", item.codigo);
       } else {
-        await supabase
-          .from("ordens_entregas")
-          .upsert({ ordem_id: o.id, sku, entregue: true, updated_at: new Date().toISOString() });
+        await supabase.from("ordens_entregas").upsert({
+          ordem_id: o.id,
+          sku: item.codigo,
+          entregue: aplicar >= Number(item.quantidade || 0),
+          qtde_entregue: aplicar,
+          updated_at: new Date().toISOString(),
+        });
       }
     }
     void qc.invalidateQueries({ queryKey: ["ordens-entregas"] });
   }
+
 
   const qtdePorSku = useMemo(() => {
     if (modo === "manual") return dados.manual;
@@ -279,6 +306,25 @@ export function ProgramacaoTab({
     }
     return { quantidade, kg, horas };
   }, [linhasEstrutura]);
+
+  const totaisEntrega = useMemo(() => {
+    let entregue = 0;
+    let saldo = 0;
+    for (const l of linhasVisiveis) {
+      const chave = l.sku.sku.trim().toUpperCase();
+      let e = 0;
+      for (const o of ordensSel) {
+        const item = o.itens.find((i) => i.codigo.trim().toUpperCase() === chave);
+        if (item) e += qtdeEntregueItem(o.id, item.codigo, Number(item.quantidade || 0));
+      }
+      entregue += e;
+      saldo += Math.max(0, l.quantidade - e);
+    }
+    return { entregue, saldo };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linhasVisiveis, ordensSel, entregueMap]);
+
+
 
   const mpTotais = useMemo(() => {
     const base = linhas.filter((l) => l.quantidade > 0);
@@ -652,7 +698,7 @@ export function ProgramacaoTab({
           <table className="w-full text-xs">
             <thead className="sticky top-0 z-10 bg-grid-head text-grid-head-foreground shadow-[0_1px_0_var(--color-border)]">
               <tr>
-                <th className="bg-grid-head px-2 py-1" colSpan={temSelecao ? 6 : 5} />
+                <th className="bg-grid-head px-2 py-1" colSpan={temSelecao ? 7 : 5} />
                 <th
                   className="border-x border-border bg-mp-head px-2 py-1 text-center text-[11px] font-bold uppercase tracking-wide text-mp-head-foreground"
                   colSpan={dados.mpItens.length}
@@ -662,16 +708,22 @@ export function ProgramacaoTab({
                 <th className="bg-grid-head px-2 py-1" colSpan={2} />
               </tr>
               <tr>
-                {temSelecao && (
-                  <th className="whitespace-nowrap bg-grid-head px-2 py-1.5 text-left text-[11px] font-bold uppercase">
-                    Entrega
-                  </th>
-                )}
                 {th("tipo", "Tipo")}
                 {th("sku", "SKU")}
                 {th("descricao", "Descrição")}
+                {temSelecao && (
+                  <th className="whitespace-nowrap bg-grid-head px-2 py-1.5 text-center text-[11px] font-bold uppercase">
+                    Entrega
+                  </th>
+                )}
                 {th("quantidade", "Quantidade")}
+                {temSelecao && (
+                  <th className="whitespace-nowrap bg-grid-head px-2 py-1.5 text-right text-[11px] font-bold uppercase">
+                    Saldo
+                  </th>
+                )}
                 {th("pallet", "% Pallet")}
+
                 {dados.mpItens.map((m) => (
                   <th
                     key={m.id}
@@ -690,8 +742,13 @@ export function ProgramacaoTab({
                 const alvos = ordensSel.filter((o) =>
                   o.itens.some((i) => i.codigo.trim().toUpperCase() === chaveSku),
                 );
-                const entregue =
-                  alvos.length > 0 && alvos.every((o) => entregueMap[`${o.id}|${chaveSku}`]);
+                const entregueQtde = alvos.reduce((s, o) => {
+                  const item = o.itens.find((i) => i.codigo.trim().toUpperCase() === chaveSku)!;
+                  return s + qtdeEntregueItem(o.id, item.codigo, Number(item.quantidade || 0));
+                }, 0);
+                const saldo = Math.max(0, l.quantidade - entregueQtde);
+                const entregue = alvos.length > 0 && l.quantidade > 0 && saldo === 0;
+                const parcial = entregueQtde > 0 && !entregue;
                 return (
                   <tr
                     key={l.sku.id}
@@ -699,23 +756,39 @@ export function ProgramacaoTab({
                       entregue ? "bg-muted text-muted-foreground opacity-70" : "even:bg-mp-cell"
                     }`}
                   >
-                    {temSelecao && (
-                      <td className="px-2 py-0.5">
-                        <button
-                          onClick={() => void alternarEntrega(l.sku.sku, entregue)}
-                          className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-semibold uppercase ${
-                            entregue
-                              ? "border-primary bg-primary text-primary-foreground"
-                              : "border-border bg-background hover:bg-accent"
-                          }`}
-                        >
-                          <Check className="size-3" /> {entregue ? "Entregue" : "Entregar"}
-                        </button>
-                      </td>
-                    )}
                     <td className="px-2 py-0.5">{l.produto?.tipo ?? "?"}</td>
                     <td className="px-2 py-0.5 font-medium">{l.sku.sku}</td>
                     <td className="px-2 py-0.5">{l.sku.descricao}</td>
+                    {temSelecao && (
+                      <td className="px-1 py-0.5">
+                        <div className="flex items-center justify-end gap-1">
+                          <CellInput
+                            type="number"
+                            value={entregueQtde}
+                            placeholder="0"
+                            className={`w-16 border-border text-right text-[11px] font-semibold ${
+                              parcial ? "text-primary" : ""
+                            }`}
+                            onCommit={(v) =>
+                              void definirEntrega(l.sku.sku, Math.min(num(v) ?? 0, l.quantidade))
+                            }
+                          />
+                          <button
+                            title={entregue ? "Zerar entrega" : "Entregar tudo"}
+                            onClick={() =>
+                              void definirEntrega(l.sku.sku, entregue ? 0 : l.quantidade)
+                            }
+                            className={`inline-flex items-center rounded border px-1 py-0.5 text-[10px] font-semibold ${
+                              entregue
+                                ? "border-primary bg-primary text-primary-foreground"
+                                : "border-border bg-background hover:bg-accent"
+                            }`}
+                          >
+                            <Check className="size-3" />
+                          </button>
+                        </div>
+                      </td>
+                    )}
                     <td className="px-1 py-0.5 text-right font-bold">
                       {modo === "manual" ? (
                         <CellInput
@@ -734,7 +807,17 @@ export function ProgramacaoTab({
                         fmtInt(l.quantidade)
                       )}
                     </td>
+                    {temSelecao && (
+                      <td
+                        className={`px-2 py-0.5 text-right font-semibold ${
+                          saldo === 0 ? "text-muted-foreground" : ""
+                        }`}
+                      >
+                        {fmtInt(saldo)}
+                      </td>
+                    )}
                     <td className="px-2 py-0.5 text-right">{l.produto ? fmt(l.pallet, 1) : "-"}</td>
+
                     {dados.mpItens.map((m) => {
                       const kg = l.kgPorMp[m.descricao.trim().toUpperCase()];
                       return (
@@ -758,7 +841,7 @@ export function ProgramacaoTab({
               {linhasVisiveis.length === 0 && (
                 <tr>
                   <td
-                    colSpan={7 + dados.mpItens.length + (temSelecao ? 1 : 0)}
+                    colSpan={7 + dados.mpItens.length + (temSelecao ? 2 : 0)}
                     className="px-3 py-6 text-center text-muted-foreground"
                   >
                     Nada para mostrar.
@@ -769,10 +852,16 @@ export function ProgramacaoTab({
             {linhasVisiveis.length > 0 && (
               <tfoot>
                 <tr className="border-t-2 border-border bg-secondary font-bold text-secondary-foreground">
-                  <td className="whitespace-nowrap px-2 py-1.5 uppercase" colSpan={temSelecao ? 4 : 3}>
+                  <td className="whitespace-nowrap px-2 py-1.5 uppercase" colSpan={3}>
                     Total ({linhasVisiveis.length} itens)
                   </td>
+                  {temSelecao && (
+                    <td className="px-2 py-1.5 text-right">{fmtInt(totaisEntrega.entregue)}</td>
+                  )}
                   <td className="px-2 py-1.5 text-right">{fmtInt(totaisVisiveis.quantidade)}</td>
+                  {temSelecao && (
+                    <td className="px-2 py-1.5 text-right">{fmtInt(totaisEntrega.saldo)}</td>
+                  )}
                   <td className="whitespace-nowrap px-2 py-1.5 text-right">
                     {fmt(totaisVisiveis.pallets, 2)} pallets
                   </td>
@@ -786,6 +875,7 @@ export function ProgramacaoTab({
                 </tr>
               </tfoot>
             )}
+
           </table>
 
         )}

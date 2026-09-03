@@ -113,18 +113,21 @@ export type Database = {
         Row: {
           entregue: boolean
           ordem_id: string
+          qtde_entregue: number
           sku: string
           updated_at: string
         }
         Insert: {
           entregue?: boolean
           ordem_id: string
+          qtde_entregue?: number
           sku: string
           updated_at?: string
         }
         Update: {
           entregue?: boolean
           ordem_id?: string
+          qtde_entregue?: number
           sku?: string
           updated_at?: string
         }
