@@ -1,0 +1,1 @@
+ALTER TABLE public.skus ADD COLUMN componente_id TEXT REFERENCES public.componentes(id) ON DELETE SET NULL;
