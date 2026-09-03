@@ -93,8 +93,17 @@ export function calcularLinhaSku(
   mpItens: MpItem[],
   quantidade: number,
 ): LinhaSku {
-  const produto = produtoDoSku(sku, produtos);
-  const comps = produto ? componentes.filter((c) => c.produto_id === produto.id) : [];
+  const compDireto = sku.componente_id
+    ? (componentes.find((c) => c.id === sku.componente_id) ?? null)
+    : null;
+  const produto = compDireto
+    ? (produtos.find((p) => p.id === compDireto.produto_id) ?? null)
+    : produtoDoSku(sku, produtos);
+  const comps = compDireto
+    ? [compDireto]
+    : produto
+      ? componentes.filter((c) => c.produto_id === produto.id)
+      : [];
   const kgPorMp: Record<string, number> = {};
   let horas: number | null = null;
   let custo: number | null = null;

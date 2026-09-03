@@ -38,6 +38,8 @@ export type Sku = {
   tipo: string;
   sku: string;
   descricao: string;
+  /** Quando preenchido, o SKU corresponde apenas a este componente da estrutura. */
+  componente_id?: string | null;
 };
 
 export type PedidoItem = {
