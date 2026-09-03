@@ -940,6 +940,8 @@ export function ProgramacaoTab({
                       <th className="whitespace-nowrap px-2 py-1 text-right">Consumo (kg)</th>
                       <th className="whitespace-nowrap px-2 py-1 text-right">R$/kg</th>
                       <th className="whitespace-nowrap px-2 py-1 text-right">Custo</th>
+                      <th className="whitespace-nowrap px-2 py-1 text-right">Cavidades</th>
+                      <th className="whitespace-nowrap px-2 py-1 text-right">Ciclo (s)</th>
                       <th className="whitespace-nowrap px-2 py-1 text-right">Peças/h</th>
                       <th className="whitespace-nowrap px-2 py-1 text-right">Horas</th>
                     </tr>
