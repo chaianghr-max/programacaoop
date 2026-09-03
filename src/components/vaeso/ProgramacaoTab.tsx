@@ -822,7 +822,7 @@ export function ProgramacaoTab({
               {linhasVisiveis.length === 0 && (
                 <tr>
                   <td
-                    colSpan={7 + dados.mpItens.length + (temSelecao ? 1 : 0)}
+                    colSpan={7 + dados.mpItens.length + (temSelecao ? 2 : 0)}
                     className="px-3 py-6 text-center text-muted-foreground"
                   >
                     Nada para mostrar.
@@ -833,10 +833,16 @@ export function ProgramacaoTab({
             {linhasVisiveis.length > 0 && (
               <tfoot>
                 <tr className="border-t-2 border-border bg-secondary font-bold text-secondary-foreground">
-                  <td className="whitespace-nowrap px-2 py-1.5 uppercase" colSpan={temSelecao ? 4 : 3}>
+                  <td className="whitespace-nowrap px-2 py-1.5 uppercase" colSpan={3}>
                     Total ({linhasVisiveis.length} itens)
                   </td>
+                  {temSelecao && (
+                    <td className="px-2 py-1.5 text-right">{fmtInt(totaisEntrega.entregue)}</td>
+                  )}
                   <td className="px-2 py-1.5 text-right">{fmtInt(totaisVisiveis.quantidade)}</td>
+                  {temSelecao && (
+                    <td className="px-2 py-1.5 text-right">{fmtInt(totaisEntrega.saldo)}</td>
+                  )}
                   <td className="whitespace-nowrap px-2 py-1.5 text-right">
                     {fmt(totaisVisiveis.pallets, 2)} pallets
                   </td>
@@ -850,6 +856,7 @@ export function ProgramacaoTab({
                 </tr>
               </tfoot>
             )}
+
           </table>
 
         )}
