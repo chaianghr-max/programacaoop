@@ -748,7 +748,7 @@ export function ProgramacaoTab({
                             value={entregueQtde}
                             placeholder="0"
                             className={`w-16 border-border text-right text-[11px] font-semibold ${
-                              parcial ? "text-warning-foreground" : ""
+                              parcial ? "text-primary" : ""
                             }`}
                             onCommit={(v) =>
                               void definirEntrega(l.sku.sku, Math.min(num(v) ?? 0, l.quantidade))
