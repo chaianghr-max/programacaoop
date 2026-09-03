@@ -940,6 +940,8 @@ export function ProgramacaoTab({
                       <th className="whitespace-nowrap px-2 py-1 text-right">Consumo (kg)</th>
                       <th className="whitespace-nowrap px-2 py-1 text-right">R$/kg</th>
                       <th className="whitespace-nowrap px-2 py-1 text-right">Custo</th>
+                      <th className="whitespace-nowrap px-2 py-1 text-right">Cavidades</th>
+                      <th className="whitespace-nowrap px-2 py-1 text-right">Ciclo (s)</th>
                       <th className="whitespace-nowrap px-2 py-1 text-right">Peças/h</th>
                       <th className="whitespace-nowrap px-2 py-1 text-right">Horas</th>
                     </tr>
@@ -953,6 +955,12 @@ export function ProgramacaoTab({
                         <td className="whitespace-nowrap px-2 py-1 text-right">{fmt(c.kg)}</td>
                         <td className="whitespace-nowrap px-2 py-1 text-right">{fmt(c.valorKg)}</td>
                         <td className="whitespace-nowrap px-2 py-1 text-right">{brl(c.custo)}</td>
+                        <td className="whitespace-nowrap px-2 py-1 text-right">
+                          {c.comp.cavidades ? fmt(c.comp.cavidades, 0) : "—"}
+                        </td>
+                        <td className="whitespace-nowrap px-2 py-1 text-right">
+                          {c.comp.ciclo_s ? fmt(c.comp.ciclo_s, 1) : "—"}
+                        </td>
                         <td className="whitespace-nowrap px-2 py-1 text-right">{fmt(c.ph, 0)}</td>
                         <td className="whitespace-nowrap px-2 py-1 text-right">{fmt(c.horas, 1)}</td>
                       </tr>
@@ -964,7 +972,7 @@ export function ProgramacaoTab({
                         Total
                       </td>
                       <td className="whitespace-nowrap px-2 py-1 text-right">{brl(detalhe.custo)}</td>
-                      <td />
+                      <td colSpan={3} />
                       <td className="whitespace-nowrap px-2 py-1 text-right">{fmt(detalhe.horas, 1)}</td>
                     </tr>
                   </tfoot>
