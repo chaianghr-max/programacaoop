@@ -896,9 +896,8 @@ export function ProgramacaoTab({
           />
           <Button
             onClick={() => {
-              gravarPedido(textoColado.split("\n"));
+              void gravarPedido(textoColado.split("\n"));
               setTextoColado("");
-              setNumeroNovo("");
               setColando(false);
             }}
           >
