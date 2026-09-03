@@ -80,15 +80,25 @@ export function ProgramacaoTab({
     queryFn: async () => {
       const { data, error } = await supabase.from("ordens_entregas").select("*");
       if (error) throw error;
-      return data as Array<{ ordem_id: string; sku: string; entregue: boolean }>;
+      return data as Array<{
+        ordem_id: string;
+        sku: string;
+        entregue: boolean;
+        qtde_entregue: number | null;
+      }>;
     },
   });
 
+  // quantidade já entregue por ordem+sku
   const entregueMap = useMemo(() => {
-    const m: Record<string, boolean> = {};
-    for (const e of entregas ?? []) if (e.entregue) m[`${e.ordem_id}|${e.sku.toUpperCase()}`] = true;
+    const m: Record<string, number> = {};
+    for (const e of entregas ?? []) {
+      const q = Number(e.qtde_entregue ?? 0);
+      m[`${e.ordem_id}|${e.sku.toUpperCase()}`] = q > 0 ? q : e.entregue ? -1 : 0;
+    }
     return m;
   }, [entregas]);
+
 
   type OrdemPainel = {
     id: string;
