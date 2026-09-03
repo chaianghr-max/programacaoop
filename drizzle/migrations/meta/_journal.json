@@ -15,6 +15,13 @@
       "when": 1788375452404,
       "tag": "0001_create_ordens_entregas",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788433446514,
+      "tag": "0002_drop_pedidos_slot_check",
+      "breakpoints": true
     }
   ]
 }
