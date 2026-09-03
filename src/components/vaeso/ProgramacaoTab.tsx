@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Boxes, Check, Download, FileText, RefreshCw } from "lucide-react";
 import { useMemo, useState } from "react";
+import { toast } from "sonner";
 
 
 import { Button } from "@/components/ui/button";
@@ -304,27 +305,46 @@ export function ProgramacaoTab({
     (dados.pedidos ?? []).reduce((a, p) => Math.max(a, p.slot), -1) + 1;
 
   async function importarPdf(file: File) {
+    const id = toast.loading("Lendo PDF...");
     try {
       const linhasTexto = await extrairTextoPdf(file);
-      gravarPedido(linhasTexto);
-    } catch {
+      toast.dismiss(id);
+      await gravarPedido(linhasTexto);
+    } catch (e) {
+      toast.dismiss(id);
+      toast.error(
+        `Não consegui ler o PDF (${e instanceof Error ? e.message : "erro"}). Cole o texto da ordem.`,
+      );
       setColando(true);
     }
   }
 
-  function gravarPedido(linhasTexto: string[]) {
+  async function gravarPedido(linhasTexto: string[]) {
     const parsed = parsePedidoLinhas(linhasTexto);
     const itens = vincularItens(parsed.itens, dados.skus, dados.produtos);
-    salvar(() =>
-      supabase.from("pedidos_importados").upsert({
-        slot: proximoSlot(),
-        numero: numeroNovo.trim() || parsed.numero,
-        data: parsed.data,
-        fornecedor: empresaNova,
-
-        itens: itens as unknown as never,
-        importado_em: new Date().toISOString(),
-      }),
+    const comSku = itens.filter((i) => !!i.sku).length;
+    if (itens.length === 0) {
+      toast.error("Nenhum item reconhecido nesse arquivo. Verifique o PDF ou cole o texto.");
+      return;
+    }
+    const slot = proximoSlot();
+    const { error } = await supabase.from("pedidos_importados").upsert({
+      slot,
+      numero: numeroNovo.trim() || parsed.numero,
+      data: parsed.data,
+      fornecedor: empresaNova,
+      itens: itens as unknown as never,
+      importado_em: new Date().toISOString(),
+    });
+    if (error) {
+      toast.error(`Falha ao salvar a ordem: ${error.message}`);
+      return;
+    }
+    setNumeroNovo("");
+    setSelecionadas((s) => [...new Set([...s, `p${slot}`])]);
+    void qc.invalidateQueries({ queryKey: ["vaeso"] });
+    toast.success(
+      `Ordem importada: ${itens.length} itens (${comSku} com SKU reconhecido).`,
     );
   }
 
@@ -877,9 +897,8 @@ export function ProgramacaoTab({
           />
           <Button
             onClick={() => {
-              gravarPedido(textoColado.split("\n"));
+              void gravarPedido(textoColado.split("\n"));
               setTextoColado("");
-              setNumeroNovo("");
               setColando(false);
             }}
           >
