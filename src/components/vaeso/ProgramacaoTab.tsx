@@ -679,7 +679,7 @@ export function ProgramacaoTab({
           <table className="w-full text-xs">
             <thead className="sticky top-0 z-10 bg-grid-head text-grid-head-foreground shadow-[0_1px_0_var(--color-border)]">
               <tr>
-                <th className="bg-grid-head px-2 py-1" colSpan={temSelecao ? 6 : 5} />
+                <th className="bg-grid-head px-2 py-1" colSpan={temSelecao ? 7 : 5} />
                 <th
                   className="border-x border-border bg-mp-head px-2 py-1 text-center text-[11px] font-bold uppercase tracking-wide text-mp-head-foreground"
                   colSpan={dados.mpItens.length}
@@ -689,16 +689,22 @@ export function ProgramacaoTab({
                 <th className="bg-grid-head px-2 py-1" colSpan={2} />
               </tr>
               <tr>
-                {temSelecao && (
-                  <th className="whitespace-nowrap bg-grid-head px-2 py-1.5 text-left text-[11px] font-bold uppercase">
-                    Entrega
-                  </th>
-                )}
                 {th("tipo", "Tipo")}
                 {th("sku", "SKU")}
                 {th("descricao", "Descrição")}
+                {temSelecao && (
+                  <th className="whitespace-nowrap bg-grid-head px-2 py-1.5 text-center text-[11px] font-bold uppercase">
+                    Entrega
+                  </th>
+                )}
                 {th("quantidade", "Quantidade")}
+                {temSelecao && (
+                  <th className="whitespace-nowrap bg-grid-head px-2 py-1.5 text-right text-[11px] font-bold uppercase">
+                    Saldo
+                  </th>
+                )}
                 {th("pallet", "% Pallet")}
+
                 {dados.mpItens.map((m) => (
                   <th
                     key={m.id}
