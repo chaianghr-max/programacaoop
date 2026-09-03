@@ -1,0 +1,1 @@
+ALTER TABLE public.pedidos_importados DROP CONSTRAINT pedidos_importados_slot_check;
