@@ -972,7 +972,7 @@ export function ProgramacaoTab({
                         Total
                       </td>
                       <td className="whitespace-nowrap px-2 py-1 text-right">{brl(detalhe.custo)}</td>
-                      <td />
+                      <td colSpan={3} />
                       <td className="whitespace-nowrap px-2 py-1 text-right">{fmt(detalhe.horas, 1)}</td>
                     </tr>
                   </tfoot>
