@@ -723,8 +723,13 @@ export function ProgramacaoTab({
                 const alvos = ordensSel.filter((o) =>
                   o.itens.some((i) => i.codigo.trim().toUpperCase() === chaveSku),
                 );
-                const entregue =
-                  alvos.length > 0 && alvos.every((o) => entregueMap[`${o.id}|${chaveSku}`]);
+                const entregueQtde = alvos.reduce((s, o) => {
+                  const item = o.itens.find((i) => i.codigo.trim().toUpperCase() === chaveSku)!;
+                  return s + qtdeEntregueItem(o.id, item.codigo, Number(item.quantidade || 0));
+                }, 0);
+                const saldo = Math.max(0, l.quantidade - entregueQtde);
+                const entregue = alvos.length > 0 && l.quantidade > 0 && saldo === 0;
+                const parcial = entregueQtde > 0 && !entregue;
                 return (
                   <tr
                     key={l.sku.id}
@@ -732,23 +737,39 @@ export function ProgramacaoTab({
                       entregue ? "bg-muted text-muted-foreground opacity-70" : "even:bg-mp-cell"
                     }`}
                   >
-                    {temSelecao && (
-                      <td className="px-2 py-0.5">
-                        <button
-                          onClick={() => void alternarEntrega(l.sku.sku, entregue)}
-                          className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-semibold uppercase ${
-                            entregue
-                              ? "border-primary bg-primary text-primary-foreground"
-                              : "border-border bg-background hover:bg-accent"
-                          }`}
-                        >
-                          <Check className="size-3" /> {entregue ? "Entregue" : "Entregar"}
-                        </button>
-                      </td>
-                    )}
                     <td className="px-2 py-0.5">{l.produto?.tipo ?? "?"}</td>
                     <td className="px-2 py-0.5 font-medium">{l.sku.sku}</td>
                     <td className="px-2 py-0.5">{l.sku.descricao}</td>
+                    {temSelecao && (
+                      <td className="px-1 py-0.5">
+                        <div className="flex items-center justify-end gap-1">
+                          <CellInput
+                            type="number"
+                            value={entregueQtde}
+                            placeholder="0"
+                            className={`w-16 border-border text-right text-[11px] font-semibold ${
+                              parcial ? "text-warning-foreground" : ""
+                            }`}
+                            onCommit={(v) =>
+                              void definirEntrega(l.sku.sku, Math.min(num(v) ?? 0, l.quantidade))
+                            }
+                          />
+                          <button
+                            title={entregue ? "Zerar entrega" : "Entregar tudo"}
+                            onClick={() =>
+                              void definirEntrega(l.sku.sku, entregue ? 0 : l.quantidade)
+                            }
+                            className={`inline-flex items-center rounded border px-1 py-0.5 text-[10px] font-semibold ${
+                              entregue
+                                ? "border-primary bg-primary text-primary-foreground"
+                                : "border-border bg-background hover:bg-accent"
+                            }`}
+                          >
+                            <Check className="size-3" />
+                          </button>
+                        </div>
+                      </td>
+                    )}
                     <td className="px-1 py-0.5 text-right font-bold">
                       {modo === "manual" ? (
                         <CellInput
@@ -767,7 +788,17 @@ export function ProgramacaoTab({
                         fmtInt(l.quantidade)
                       )}
                     </td>
+                    {temSelecao && (
+                      <td
+                        className={`px-2 py-0.5 text-right font-semibold ${
+                          saldo === 0 ? "text-muted-foreground" : ""
+                        }`}
+                      >
+                        {fmtInt(saldo)}
+                      </td>
+                    )}
                     <td className="px-2 py-0.5 text-right">{l.produto ? fmt(l.pallet, 1) : "-"}</td>
+
                     {dados.mpItens.map((m) => {
                       const kg = l.kgPorMp[m.descricao.trim().toUpperCase()];
                       return (
