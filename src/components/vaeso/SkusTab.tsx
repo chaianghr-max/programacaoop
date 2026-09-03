@@ -24,8 +24,15 @@ export function SkusTab({
       s.descricao.toLowerCase().includes(termo),
   );
 
-  const atualizar = (id: string, campo: string, valor: string) =>
+  const atualizar = (id: string, campo: string, valor: string | null) =>
     salvar(() => supabase.from("skus").update({ [campo]: valor } as never).eq("id", id));
+
+  const opcoesComponentes = dados.produtos
+    .map((p) => ({
+      produto: p,
+      comps: dados.componentes.filter((c) => c.produto_id === p.id),
+    }))
+    .filter((g) => g.comps.length > 0);
 
   return (
     <div className="space-y-4">
@@ -55,6 +62,7 @@ export function SkusTab({
               <th className="w-28 px-3 py-2 text-left font-semibold">Tipo</th>
               <th className="w-40 px-3 py-2 text-left font-semibold">SKU</th>
               <th className="px-3 py-2 text-left font-semibold">Descrição</th>
+              <th className="w-64 px-3 py-2 text-left font-semibold">Item da estrutura</th>
               <th className="w-12 px-3 py-2" />
             </tr>
           </thead>
@@ -70,6 +78,24 @@ export function SkusTab({
                 <td className="px-1 py-1">
                   <CellInput value={s.descricao} onCommit={(v) => atualizar(s.id, "descricao", v)} />
                 </td>
+                <td className="px-1 py-1">
+                  <select
+                    className="w-full rounded-md border border-input bg-background px-2 py-1 text-xs"
+                    value={s.componente_id ?? ""}
+                    onChange={(e) => atualizar(s.id, "componente_id", e.target.value || null)}
+                  >
+                    <option value="">Produto completo</option>
+                    {opcoesComponentes.map((g) => (
+                      <optgroup key={g.produto.id} label={g.produto.nome}>
+                        {g.comps.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.descricao}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
+                </td>
                 <td className="px-3 py-1">
                   <button
                     aria-label="Excluir"
@@ -83,7 +109,7 @@ export function SkusTab({
             ))}
             {itens.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-3 py-6 text-center text-muted-foreground">
+                <td colSpan={5} className="px-3 py-6 text-center text-muted-foreground">
                   Nenhum SKU encontrado.
                 </td>
               </tr>

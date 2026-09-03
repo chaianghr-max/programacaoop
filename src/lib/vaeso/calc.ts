@@ -93,8 +93,17 @@ export function calcularLinhaSku(
   mpItens: MpItem[],
   quantidade: number,
 ): LinhaSku {
-  const produto = produtoDoSku(sku, produtos);
-  const comps = produto ? componentes.filter((c) => c.produto_id === produto.id) : [];
+  const compDireto = sku.componente_id
+    ? (componentes.find((c) => c.id === sku.componente_id) ?? null)
+    : null;
+  const produto = compDireto
+    ? (produtos.find((p) => p.id === compDireto.produto_id) ?? null)
+    : produtoDoSku(sku, produtos);
+  const comps = compDireto
+    ? [compDireto]
+    : produto
+      ? componentes.filter((c) => c.produto_id === produto.id)
+      : [];
   const kgPorMp: Record<string, number> = {};
   let horas: number | null = null;
   let custo: number | null = null;
@@ -145,40 +154,44 @@ export type LinhaEstrutura = {
   horas: number | null;
 };
 
-export function montarEstrutura(linhas: LinhaSku[], componentes: Componente[]): LinhaEstrutura[] {
-  const porProduto = new Map<string, { qtd: number; skus: string[]; nome: string; tipo: string }>();
+export function montarEstrutura(linhas: LinhaSku[], _componentes?: Componente[]): LinhaEstrutura[] {
+  const porComponente = new Map<
+    string,
+    { comp: Componente; qtd: number; skus: string[]; nome: string; tipo: string }
+  >();
   for (const l of linhas) {
-    if (!l.produto) continue;
-    const atual = porProduto.get(l.produto.id) ?? {
-      qtd: 0,
-      skus: [],
-      nome: l.produto.nome,
-      tipo: l.produto.tipo,
-    };
-    atual.qtd += l.quantidade;
-    atual.skus.push(l.sku.sku);
-    porProduto.set(l.produto.id, atual);
+    for (const lc of l.componentes) {
+      const atual = porComponente.get(lc.comp.id) ?? {
+        comp: lc.comp,
+        qtd: 0,
+        skus: [],
+        nome: l.produto?.nome ?? "",
+        tipo: l.produto?.tipo ?? l.sku.tipo,
+      };
+      atual.qtd += l.quantidade;
+      if (!atual.skus.includes(l.sku.sku)) atual.skus.push(l.sku.sku);
+      porComponente.set(lc.comp.id, atual);
+    }
   }
   const out: LinhaEstrutura[] = [];
-  for (const [produtoId, info] of porProduto) {
-    for (const comp of componentes.filter((c) => c.produto_id === produtoId)) {
-      const ph = pecasHora(comp.cavidades, comp.ciclo_s);
-      out.push({
-        key: comp.id,
-        item: comp.descricao,
-        mp: comp.mp,
-        produtoNome: info.nome,
-        tipo: info.tipo,
-        skus: info.skus,
-        quantidade: info.qtd,
-        pesoG: comp.peso_g,
-        kg: consumoKg(comp.peso_g, info.qtd),
-        cavidades: comp.cavidades,
-        cicloS: comp.ciclo_s,
-        ph,
-        horas: horasMaquina(info.qtd, ph),
-      });
-    }
+  for (const info of porComponente.values()) {
+    const comp = info.comp;
+    const ph = pecasHora(comp.cavidades, comp.ciclo_s);
+    out.push({
+      key: comp.id,
+      item: comp.descricao,
+      mp: comp.mp,
+      produtoNome: info.nome,
+      tipo: info.tipo,
+      skus: info.skus,
+      quantidade: info.qtd,
+      pesoG: comp.peso_g,
+      kg: consumoKg(comp.peso_g, info.qtd),
+      cavidades: comp.cavidades,
+      cicloS: comp.ciclo_s,
+      ph,
+      horas: horasMaquina(info.qtd, ph),
+    });
   }
   return out;
 }

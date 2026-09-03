@@ -29,6 +29,13 @@
       "when": 1788433831520,
       "tag": "0003_add_qtde_entregue_ordens_entregas",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1788463289222,
+      "tag": "0004_add_componente_id_skus",
+      "breakpoints": true
     }
   ]
 }

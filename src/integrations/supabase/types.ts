@@ -222,6 +222,7 @@ export type Database = {
       }
       skus: {
         Row: {
+          componente_id: string | null
           created_at: string
           descricao: string
           id: string
@@ -229,6 +230,7 @@ export type Database = {
           tipo: string
         }
         Insert: {
+          componente_id?: string | null
           created_at?: string
           descricao?: string
           id: string
@@ -236,13 +238,22 @@ export type Database = {
           tipo?: string
         }
         Update: {
+          componente_id?: string | null
           created_at?: string
           descricao?: string
           id?: string
           sku?: string
           tipo?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "skus_componente_id_fkey"
+            columns: ["componente_id"]
+            isOneToOne: false
+            referencedRelation: "componentes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
