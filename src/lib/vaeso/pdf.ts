@@ -12,7 +12,7 @@ const IGNORAR = [
 ];
 
 const ITEM_RE =
-  /^(.*?)\s+(?:(\d{6,14})\s+)?((?:\d{1,3}\.)*\d+,\d{2})\s+(PC|PÇ)\s+[\d.,]+\s+[\d.,]+\s+[\d.,]+\s*$/i;
+  /^(.*?)\s*(?:(\d{6,14})\s+)?((?:\d{1,3}\.)*\d+,\d{2})\s+(PC|PÇ)\s+[\d.,]+\s+[\d.,]+\s+[\d.,]+\s*$/i;
 
 const parseNum = (s: string) => Number(s.replace(/\./g, "").replace(",", "."));
 
@@ -53,6 +53,11 @@ export function parsePedidoLinhas(linhasBrutas: string[]): PedidoParseado {
         .replace(/CNPJ:?/i, "")
         .replace(/\s{2,}/g, " ")
         .trim();
+    }
+
+    if (/Itens da compra/i.test(linha) || /^Item\s/i.test(linha)) {
+      acumulado = [];
+      continue;
     }
 
     if (IGNORAR.some((p) => linha.startsWith(p))) continue;
