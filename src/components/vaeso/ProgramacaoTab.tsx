@@ -955,6 +955,12 @@ export function ProgramacaoTab({
                         <td className="whitespace-nowrap px-2 py-1 text-right">{fmt(c.kg)}</td>
                         <td className="whitespace-nowrap px-2 py-1 text-right">{fmt(c.valorKg)}</td>
                         <td className="whitespace-nowrap px-2 py-1 text-right">{brl(c.custo)}</td>
+                        <td className="whitespace-nowrap px-2 py-1 text-right">
+                          {c.comp.cavidades ? fmt(c.comp.cavidades, 0) : "—"}
+                        </td>
+                        <td className="whitespace-nowrap px-2 py-1 text-right">
+                          {c.comp.ciclo_s ? fmt(c.comp.ciclo_s, 1) : "—"}
+                        </td>
                         <td className="whitespace-nowrap px-2 py-1 text-right">{fmt(c.ph, 0)}</td>
                         <td className="whitespace-nowrap px-2 py-1 text-right">{fmt(c.horas, 1)}</td>
                       </tr>
