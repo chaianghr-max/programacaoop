@@ -173,20 +173,30 @@ export function ProgramacaoTab({
   }
 
 
-  async function alternarEntrega(sku: string, entregue: boolean) {
+  // grava a quantidade entregue de um SKU, distribuindo entre as ordens selecionadas
+  async function definirEntrega(sku: string, quantidade: number) {
     const chave = sku.trim().toUpperCase();
     const alvo = ordensSel.filter((o) => o.itens.some((i) => i.codigo.trim().toUpperCase() === chave));
+    let restante = Math.max(0, quantidade);
     for (const o of alvo) {
-      if (entregue) {
-        await supabase.from("ordens_entregas").delete().eq("ordem_id", o.id).eq("sku", sku);
+      const item = o.itens.find((i) => i.codigo.trim().toUpperCase() === chave)!;
+      const aplicar = Math.min(restante, Number(item.quantidade || 0));
+      restante -= aplicar;
+      if (aplicar <= 0) {
+        await supabase.from("ordens_entregas").delete().eq("ordem_id", o.id).eq("sku", item.codigo);
       } else {
-        await supabase
-          .from("ordens_entregas")
-          .upsert({ ordem_id: o.id, sku, entregue: true, updated_at: new Date().toISOString() });
+        await supabase.from("ordens_entregas").upsert({
+          ordem_id: o.id,
+          sku: item.codigo,
+          entregue: aplicar >= Number(item.quantidade || 0),
+          qtde_entregue: aplicar,
+          updated_at: new Date().toISOString(),
+        });
       }
     }
     void qc.invalidateQueries({ queryKey: ["ordens-entregas"] });
   }
+
 
   const qtdePorSku = useMemo(() => {
     if (modo === "manual") return dados.manual;
