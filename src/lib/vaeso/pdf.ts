@@ -55,6 +55,11 @@ export function parsePedidoLinhas(linhasBrutas: string[]): PedidoParseado {
         .trim();
     }
 
+    if (/Itens da compra/i.test(linha) || /^Item\s/i.test(linha)) {
+      acumulado = [];
+      continue;
+    }
+
     if (IGNORAR.some((p) => linha.startsWith(p))) continue;
 
     const m = linha.match(ITEM_RE);
