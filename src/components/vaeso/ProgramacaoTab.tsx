@@ -307,6 +307,25 @@ export function ProgramacaoTab({
     return { quantidade, kg, horas };
   }, [linhasEstrutura]);
 
+  const totaisEntrega = useMemo(() => {
+    let entregue = 0;
+    let saldo = 0;
+    for (const l of linhasVisiveis) {
+      const chave = l.sku.sku.trim().toUpperCase();
+      let e = 0;
+      for (const o of ordensSel) {
+        const item = o.itens.find((i) => i.codigo.trim().toUpperCase() === chave);
+        if (item) e += qtdeEntregueItem(o.id, item.codigo, Number(item.quantidade || 0));
+      }
+      entregue += e;
+      saldo += Math.max(0, l.quantidade - e);
+    }
+    return { entregue, saldo };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linhasVisiveis, ordensSel, entregueMap]);
+
+
+
   const mpTotais = useMemo(() => {
     const base = linhas.filter((l) => l.quantidade > 0);
     return dados.mpItens.map((m) => {
