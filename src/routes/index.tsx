@@ -65,12 +65,23 @@ function Painel() {
   const logado = !!email;
   const { data: dados, isLoading, error } = useDados(logado);
   const salvarMut = useSalvar();
-  const salvar = (fn: () => PromiseLike<unknown>) => salvarMut.mutate(fn);
+  const podeEditarGeral = !!email && !email.startsWith("luana");
+  const salvar = (fn: () => PromiseLike<unknown>) => {
+    if (!podeEditarGeral) {
+      toast.error("Seu acesso permite editar apenas as abas PKS e Estoque PKS.");
+      return;
+    }
+    salvarMut.mutate(fn);
+  };
 
   if (!pronto) return <div className="min-h-screen bg-muted" />;
   if (!logado) return <LoginCard />;
 
-  const nome = email?.startsWith("diretoria") ? "Diretoria" : "Gisele";
+  const nome = email?.startsWith("diretoria")
+    ? "Diretoria"
+    : email?.startsWith("luana")
+      ? "Luana"
+      : "Gisele";
 
   return (
     <div className="min-h-screen bg-muted">
