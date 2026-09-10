@@ -859,7 +859,9 @@ export function ProgramacaoTab({
                   return s + qtdeEntregueItem(o.id, item.codigo, Number(item.quantidade || 0));
                 }, 0);
                 const saldo = Math.max(0, l.quantidade - entregueQtde);
-                const entregue = alvos.length > 0 && l.quantidade > 0 && saldo === 0;
+                const encerrada = alvos.some((o) => encerradaSet.has(`${o.id}|${chaveSku}`));
+                const entregue =
+                  encerrada || (alvos.length > 0 && l.quantidade > 0 && saldo === 0);
                 const parcial = entregueQtde > 0 && !entregue;
                  const pendentesDaLinha = alvos.flatMap((o) =>
                    entregasPks.filter(
