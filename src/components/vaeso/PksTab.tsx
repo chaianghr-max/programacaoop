@@ -151,7 +151,10 @@ export function PksTab({ dados }: { dados: Dados }) {
       quantidade,
     });
     setSalvando(null);
-    if (error) return toast.error(`Falha ao lançar entrega: ${error.message}`);
+    if (error) {
+      toast.error(`Falha ao lançar entrega: ${error.message}`);
+      return;
+    }
     setEntradas((atual) => ({ ...atual, [campo]: "" }));
     await qc.invalidateQueries({ queryKey: ["pks-entregas"] });
     toast.success(`${fmtInt(quantidade)} unidades enviadas para confirmação.`);
@@ -171,7 +174,10 @@ export function PksTab({ dados }: { dados: Dados }) {
       quantidade,
     });
     setSalvando(null);
-    if (error) return toast.error(`Falha ao lançar item: ${error.message}`);
+    if (error) {
+      toast.error(`Falha ao lançar item: ${error.message}`);
+      return;
+    }
     setEntradas((atual) => ({ ...atual, [campo]: "" }));
     await qc.invalidateQueries({ queryKey: ["pks-componentes-entregas"] });
   }
