@@ -54,6 +54,9 @@ export function PksTab({ dados }: { dados: Dados }) {
   const [entradas, setEntradas] = useState<Record<string, string>>({});
   const [salvando, setSalvando] = useState<string | null>(null);
   const [detalhe, setDetalhe] = useState<LinhaSku | null>(null);
+  const [confirmacao, setConfirmacao] = useState<
+    { titulo: string; mensagem: string; acao: () => void } | null
+  >(null);
   const qc = useQueryClient();
 
   const { data: entregas = [] } = useQuery({
