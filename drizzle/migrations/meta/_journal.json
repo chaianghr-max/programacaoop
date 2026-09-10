@@ -36,6 +36,13 @@
       "when": 1788463289222,
       "tag": "0004_add_componente_id_skus",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1789067163919,
+      "tag": "0005_create_pks_delivery_workflow",
+      "breakpoints": true
     }
   ]
 }
