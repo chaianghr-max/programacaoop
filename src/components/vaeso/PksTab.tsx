@@ -653,7 +653,7 @@ function FragmentoLinha({
       <tr
         className={`border-t border-border ${
           concluida
-            ? "bg-foreground/20 font-semibold text-foreground/70 line-through decoration-foreground/30"
+            ? "bg-foreground/20 font-semibold text-foreground/70"
             : "even:bg-mp-cell"
         }`}
       >
