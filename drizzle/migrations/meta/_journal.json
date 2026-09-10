@@ -50,6 +50,13 @@
       "when": 1789068227054,
       "tag": "0006_pks_estoque_e_cancelamentos",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1789068753743,
+      "tag": "0007_create_user_roles_and_restrict_writes",
+      "breakpoints": true
     }
   ]
 }
