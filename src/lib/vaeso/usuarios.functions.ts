@@ -58,7 +58,7 @@ async function lerPrefs(supabaseAdmin: Admin): Promise<Record<string, unknown>> 
 async function gravarPrefs(supabaseAdmin: Admin, valor: Record<string, unknown>) {
   const { error } = await supabaseAdmin
     .from("app_prefs")
-    .upsert({ chave: CHAVE_PREFS, valor, updated_at: new Date().toISOString() });
+    .upsert({ chave: CHAVE_PREFS, valor: valor as never, updated_at: new Date().toISOString() });
   if (error) throw new Error(error.message);
 }
 
