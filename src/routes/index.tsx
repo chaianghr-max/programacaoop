@@ -54,6 +54,7 @@ function Painel() {
   const [email, setEmail] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [papel, setPapel] = useState<"admin" | "pks" | "leitura">("leitura");
+  const [permissoes, setPermissoes] = useState<PermissoesAbas>(permissoesDoPapel("leitura"));
   const [aba, setAba] = useState<AbaId>("mp");
 
   useEffect(() => {
@@ -72,25 +73,31 @@ function Painel() {
   useEffect(() => {
     if (!userId) {
       setPapel("leitura");
+      setPermissoes(permissoesDoPapel("leitura"));
       return;
     }
-    void supabase
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", userId)
-      .then(({ data }) => {
-        const papeis = (data ?? []).map((r) => r.role as string);
-        setPapel(papeis.includes("admin") ? "admin" : papeis.includes("pks") ? "pks" : "leitura");
-      });
+    void (async () => {
+      const { data } = await supabase.from("user_roles").select("role").eq("user_id", userId);
+      const papeis = (data ?? []).map((r) => r.role as string);
+      const atual = papeis.includes("admin") ? "admin" : papeis.includes("pks") ? "pks" : "leitura";
+      setPapel(atual);
+      const { data: prefs } = await supabase
+        .from("app_prefs")
+        .select("valor")
+        .eq("chave", "permissoes_abas")
+        .maybeSingle();
+      const mapa = (prefs?.valor ?? {}) as Record<string, unknown>;
+      setPermissoes(normalizarPermissoes(mapa[userId], atual));
+    })();
   }, [userId]);
 
   const logado = !!email;
   const { data: dados, isLoading, error } = useDados(logado);
   const salvarMut = useSalvar();
   const ehDiretoria = papel === "admin" && !!email && email.startsWith("diretoria");
-  const podeEditarGeral = papel === "admin";
+  const podeEditar = (id: AbaId) => id !== "usuarios" && permissoes[id as AbaPerm] === "editar";
   const salvar = (fn: () => PromiseLike<unknown>) => {
-    if (!podeEditarGeral) {
+    if (!podeEditar(aba)) {
       toast.error("Seu acesso não permite editar esta aba.");
       return;
     }
@@ -99,6 +106,7 @@ function Painel() {
 
   if (!pronto) return <div className="min-h-screen bg-muted" />;
   if (!logado) return <LoginCard />;
+
 
   const nome = (email?.split("@")[0] ?? "").replace(/^./, (c) => c.toUpperCase());
 
