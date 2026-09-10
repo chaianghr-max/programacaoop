@@ -174,7 +174,10 @@ function Painel() {
             {aba === "skus" && <SkusTab dados={dados} salvar={salvar} />}
             {aba === "programacao" && <ProgramacaoTab dados={dados} salvar={salvar} />}
             {aba === "pks" && <PksTab dados={dados} />}
-            {aba === "estoque-pks" && <EstoquePksTab dados={dados} />}
+            {aba === "estoque-pks" && (
+              <EstoquePksTab dados={dados} podeEditar={podeEditar("estoque-pks")} />
+            )}
+
             {aba === "usuarios" && ehDiretoria && <UsuariosTab />}
           </>
         )}
