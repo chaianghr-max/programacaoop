@@ -280,7 +280,6 @@ export function PksTab({ dados }: { dados: Dados }) {
       atual.includes(id) ? atual.filter((item) => item !== id) : [...atual, id],
     );
 
-  const todasSelecionadas = ordens.length > 0 && selecionadas.length === ordens.length;
 
   return (
     <div className="space-y-4">
