@@ -3,6 +3,7 @@ import { LogOut } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { EstoquePksTab } from "@/components/vaeso/EstoquePksTab";
 import { LoginCard } from "@/components/vaeso/LoginCard";
 import { MpTab } from "@/components/vaeso/MpTab";
 import { PksTab } from "@/components/vaeso/PksTab";
@@ -40,6 +41,7 @@ const ABAS = [
   { id: "skus", label: "SKU's" },
   { id: "programacao", label: "Programação" },
   { id: "pks", label: "PKS" },
+  { id: "estoque-pks", label: "Estoque PKS" },
 ] as const;
 
 type AbaId = (typeof ABAS)[number]["id"];
@@ -113,6 +115,7 @@ function Painel() {
             {aba === "skus" && <SkusTab dados={dados} salvar={salvar} />}
             {aba === "programacao" && <ProgramacaoTab dados={dados} salvar={salvar} />}
             {aba === "pks" && <PksTab dados={dados} />}
+            {aba === "estoque-pks" && <EstoquePksTab dados={dados} />}
           </>
         )}
       </main>
