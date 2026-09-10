@@ -85,6 +85,26 @@ export function PksTab({ dados }: { dados: Dados }) {
     },
   });
 
+  const { data: encerradas = [] } = useQuery({
+    queryKey: ["ordens-linhas-encerradas"],
+    refetchInterval: 10_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("ordens_linhas_encerradas")
+        .select("ordem_id,sku,encerrada");
+      if (error) throw error;
+      return data as Array<{ ordem_id: string; sku: string; encerrada: boolean }>;
+    },
+  });
+
+  const encerradaSet = useMemo(() => {
+    const conjunto = new Set<string>();
+    for (const item of encerradas) {
+      if (item.encerrada) conjunto.add(`${item.ordem_id}|${normalizar(item.sku)}`);
+    }
+    return conjunto;
+  }, [encerradas]);
+
   const ordens = useMemo(
     () =>
       dados.pedidos
