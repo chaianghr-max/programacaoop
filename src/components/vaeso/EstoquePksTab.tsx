@@ -462,7 +462,7 @@ export function EstoquePksTab({ dados, podeEditar = true }: { dados: Dados; pode
             ))}
             {saldos.length === 0 && (
               <tr>
-                <td colSpan={podeEditar ? 10 : 9} className="px-3 py-8 text-center text-muted-foreground">
+                <td colSpan={podeEditar ? 11 : 9} className="px-3 py-8 text-center text-muted-foreground">
                   Nenhum apontamento da PKS até o momento.
                 </td>
               </tr>
