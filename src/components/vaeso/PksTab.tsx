@@ -574,15 +574,15 @@ function FragmentoLinha({
             <Input
               type="number"
               min="0"
-              max={saldo}
               value={entrada}
               onChange={(evento) => onEntrada(evento.target.value)}
               placeholder={fmtInt(produzido)}
               className="h-7 w-20 text-right font-bold"
             />
-            <Button size="icon" className="size-7" disabled={!saldo || salvando === campo} onClick={onLancar} title="Somar entrega">
+            <Button size="icon" className="size-7" disabled={salvando === campo} onClick={onLancar} title="Somar entrega (pode passar da quantidade da OC)">
               <Plus className="size-4" />
             </Button>
+
             <Button
               size="icon"
               variant="outline"
