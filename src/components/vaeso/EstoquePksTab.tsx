@@ -158,6 +158,60 @@ export function EstoquePksTab({ dados, podeEditar = true }: { dados: Dados; pode
     [saldos],
   );
 
+  /** Grava a diferença como um ajuste manual de estoque. */
+  async function ajustarSaldo(sku: string, saldoAtual: number) {
+    const novo = num(ajustes[sku]);
+    if (novo === null || novo === saldoAtual) return;
+    const agora = new Date();
+    const { error } = await supabase.from("pks_estoque_baixas").insert({
+      nf_numero: `AJUSTE ${agora.toISOString()}`,
+      nf_data: agora.toLocaleDateString("pt-BR"),
+      sku,
+      quantidade: saldoAtual - novo,
+    });
+    if (error) {
+      toast.error(`Falha ao ajustar o saldo: ${error.message}`);
+      return;
+    }
+    setAjustes((atual) => ({ ...atual, [sku]: "" }));
+    await qc.invalidateQueries({ queryKey: ["pks-estoque-baixas"] });
+    toast.success(`Saldo de ${sku} ajustado para ${fmtInt(novo)}.`);
+  }
+
+  function exportarExcel() {
+    const cabecalho = [
+      "OC",
+      "Tipo",
+      "SKU",
+      "Descrição",
+      "Última produção",
+      "Produzido",
+      "Baixado (NF)",
+      "Saldo",
+      "Pallets",
+    ];
+    const linhas = saldos.map((item) => [
+      item.ocs,
+      item.tipo,
+      item.sku,
+      item.descricao,
+      dataBr(item.ultima),
+      item.produzido,
+      item.baixado,
+      item.saldo,
+      item.pallets === null ? "" : item.pallets.toFixed(2).replace(".", ","),
+    ]);
+    const csv = [cabecalho, ...linhas]
+      .map((linha) => linha.map((celula) => `"${String(celula).replace(/"/g, '""')}"`).join(";"))
+      .join("\r\n");
+    const url = URL.createObjectURL(new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `estoque-pks-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
 
   async function importarNf(file: File) {
     setImportando(true);
