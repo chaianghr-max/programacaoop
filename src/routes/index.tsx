@@ -111,7 +111,8 @@ function Painel() {
           <div className="ml-auto flex items-center gap-3 text-sm">
             <span className="opacity-90">
               {nome}
-              {!podeEditarGeral && " · somente leitura (exceto PKS)"}
+              {papel === "pks" && " · edita PKS e Estoque"}
+              {papel === "leitura" && " · somente visualização"}
             </span>
             {ehDiretoria && (
               <Button
