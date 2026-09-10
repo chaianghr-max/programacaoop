@@ -496,6 +496,7 @@ export function PksTab({ dados }: { dados: Dados }) {
                 <td className="px-2 py-1.5 text-right">{fmtInt(totais.entregue)}</td>
                 <td className="px-2 py-1.5 text-right">{fmtInt(totais.saldo)}</td>
                 <td />
+                <td />
               </tr>
             </tfoot>
           )}
