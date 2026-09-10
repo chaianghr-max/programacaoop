@@ -230,28 +230,30 @@ export function PksTab({ dados }: { dados: Dados }) {
     await qc.invalidateQueries({ queryKey: ["pks-componentes-entregas"] });
   }
 
-  /** Cancela os lançamentos ainda pendentes (não aceitos na Programação). */
+  /** Estorna todos os lançamentos da linha (pendentes e já aceitos na Programação). */
   async function estornarPrincipal(linha: LinhaPks) {
     const alvos = ativas.filter(
       (item) =>
-        item.status === "pendente" &&
         item.ordem_id === linha.ordemId &&
         normalizar(item.sku) === normalizar(linha.skuCodigo),
     );
     if (alvos.length === 0) {
-      toast.info("Não há quantidade pendente para estornar nesta linha.");
+      toast.info("Não há quantidade lançada para estornar nesta linha.");
       return;
     }
-    const { error } = await supabase
-      .from("pks_entregas")
-      .update({ status: "cancelado" })
-      .in("id", alvos.map((item) => item.id));
-    if (error) {
-      toast.error(`Falha ao estornar: ${error.message}`);
-      return;
+    for (const item of alvos) {
+      const { error } = await supabase.rpc("pks_estornar_entrega", { _entrega_id: item.id });
+      if (error) {
+        toast.error(`Falha ao estornar: ${error.message}`);
+        return;
+      }
     }
-    await qc.invalidateQueries({ queryKey: ["pks-entregas"] });
-    toast.success("Quantidade pendente estornada.");
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: ["pks-entregas"] }),
+      qc.invalidateQueries({ queryKey: ["ordens-entregas"] }),
+      qc.invalidateQueries({ queryKey: ["pks-entregas-aceitas"] }),
+    ]);
+    toast.success("Quantidade devolvida ao saldo.");
   }
 
   async function estornarComponente(linha: LinhaPks, componenteId: string) {
@@ -262,18 +264,18 @@ export function PksTab({ dados }: { dados: Dados }) {
         item.componente_id === componenteId,
     );
     if (alvos.length === 0) return;
-    const ultimo = alvos[alvos.length - 1];
-    if (!ultimo) return;
     const { error } = await supabase
       .from("pks_componentes_entregas")
       .update({ status: "cancelado" })
-      .eq("id", ultimo.id);
+      .in("id", alvos.map((item) => item.id));
     if (error) {
       toast.error(`Falha ao estornar item: ${error.message}`);
       return;
     }
     await qc.invalidateQueries({ queryKey: ["pks-componentes-entregas"] });
+    toast.success("Quantidade do item devolvida ao saldo.");
   }
+
 
   const alternarOrdem = (id: string) =>
     setSelecionadas((atual) =>
