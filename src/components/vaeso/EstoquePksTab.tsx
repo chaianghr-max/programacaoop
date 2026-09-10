@@ -406,6 +406,7 @@ export function EstoquePksTab({ dados, podeEditar = true }: { dados: Dados; pode
               <th className="px-2 py-1.5 text-right uppercase">Saldo</th>
               {podeEditar && <th className="px-2 py-1.5 text-center uppercase">Ajustar saldo</th>}
               <th className="px-2 py-1.5 text-right uppercase">Pallets</th>
+              {podeEditar && <th className="w-10 px-2 py-1.5" />}
             </tr>
           </thead>
           <tbody>
