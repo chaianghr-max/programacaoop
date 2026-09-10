@@ -451,6 +451,8 @@ export function PksTab({ dados }: { dados: Dados }) {
                   onLancar={() => void lancarPrincipal(linha)}
                   onEstornar={() => void estornarPrincipal(linha)}
                   onCalculo={() => setDetalhe(linha.calculo)}
+                  encerrada={encerradaSet.has(`${linha.ordemId}|${normalizar(linha.skuCodigo)}`)}
+                  onEncerrar={() => void alternarEncerramento(linha)}
                   componentes={linha.calculo.componentes.map((componente) => {
                     const campoComponente = `componente|${linha.key}|${componente.comp.id}`;
                     const feito = totalComponente(linha.ordemId, linha.skuCodigo, componente.comp.id);
