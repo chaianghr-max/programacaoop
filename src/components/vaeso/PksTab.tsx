@@ -420,6 +420,7 @@ export function PksTab({ dados }: { dados: Dados }) {
               <th className="bg-secondary px-2 py-1.5 text-center font-bold uppercase">Entrega</th>
               <th className="bg-secondary px-2 py-1.5 text-right font-bold uppercase">Saldo</th>
               <th className="px-2 py-1.5 text-center uppercase">Cálculo</th>
+              <th className="px-2 py-1.5 text-center uppercase">Encerrar</th>
             </tr>
           </thead>
           <tbody>
