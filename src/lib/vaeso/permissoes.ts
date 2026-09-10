@@ -37,9 +37,10 @@ export function normalizarPermissoes(valor: unknown, papel: PapelBase): Permisso
 }
 
 /** Papéis de banco derivados das permissões por aba (RLS). */
-export function papeisDasPermissoes(p: PermissoesAbas): PapelBase[] {
-  const papeis: PapelBase[] = [];
+export function papeisDasPermissoes(p: PermissoesAbas): Array<"admin" | "pks"> {
+  const papeis: Array<"admin" | "pks"> = [];
   if (ABAS_ADMIN.some((aba) => p[aba] === "editar")) papeis.push("admin");
   else if (ABAS_PKS.some((aba) => p[aba] === "editar")) papeis.push("pks");
   return papeis;
 }
+
