@@ -320,6 +320,23 @@ export function PksTab({ dados }: { dados: Dados }) {
   }
 
 
+  /** Encerra (ou reabre) a linha da ordem, mesmo com saldo em aberto. */
+  async function alternarEncerramento(linha: LinhaPks) {
+    const encerrada = encerradaSet.has(`${linha.ordemId}|${normalizar(linha.skuCodigo)}`);
+    const { error } = await supabase.from("ordens_linhas_encerradas").upsert({
+      ordem_id: linha.ordemId,
+      sku: linha.skuCodigo,
+      encerrada: !encerrada,
+      updated_at: new Date().toISOString(),
+    });
+    if (error) {
+      toast.error(`Falha ao encerrar a linha: ${error.message}`);
+      return;
+    }
+    await qc.invalidateQueries({ queryKey: ["ordens-linhas-encerradas"] });
+    toast.success(encerrada ? "Linha reaberta." : "Linha encerrada.");
+  }
+
   const alternarOrdem = (id: string) =>
     setSelecionadas((atual) =>
       atual.includes(id) ? atual.filter((item) => item !== id) : [...atual, id],
