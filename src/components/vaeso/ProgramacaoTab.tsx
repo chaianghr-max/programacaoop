@@ -878,7 +878,9 @@ export function ProgramacaoTab({
                   <tr
                     key={l.sku.id}
                     className={`border-t border-border ${
-                      entregue ? "bg-muted text-muted-foreground opacity-70" : "even:bg-mp-cell"
+                      entregue
+                        ? "bg-foreground/20 font-semibold text-foreground/70"
+                        : "even:bg-mp-cell"
                     }`}
                   >
                     <td className="px-2 py-0.5">{l.produto?.tipo ?? "?"}</td>
