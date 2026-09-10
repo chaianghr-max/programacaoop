@@ -87,7 +87,7 @@ function Painel() {
   const logado = !!email;
   const { data: dados, isLoading, error } = useDados(logado);
   const salvarMut = useSalvar();
-  const ehDiretoria = papel === "admin";
+  const ehDiretoria = papel === "admin" && !!email && email.startsWith("diretoria");
   const podeEditarGeral = papel === "admin";
   const salvar = (fn: () => PromiseLike<unknown>) => {
     if (!podeEditarGeral) {
