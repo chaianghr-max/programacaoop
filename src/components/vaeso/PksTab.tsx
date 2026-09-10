@@ -702,6 +702,21 @@ function FragmentoLinha({
             <Calculator className="size-4" />
           </Button>
         </td>
+        <td className="px-2 py-1 text-center">
+          <Button
+            variant={encerrada ? "default" : "outline"}
+            size="icon"
+            className="size-7"
+            onClick={onEncerrar}
+            title={
+              encerrada
+                ? "Reabrir esta linha da ordem"
+                : "Encerrar esta linha da ordem, mesmo com saldo em aberto"
+            }
+          >
+            {encerrada ? <LockOpen className="size-3.5" /> : <Lock className="size-3.5" />}
+          </Button>
+        </td>
       </tr>
       {aberta && componentes.map((componente) => (
         <tr key={componente.id} className="border-t border-border bg-muted/40 text-[11px]">
