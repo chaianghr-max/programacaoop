@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { LogOut } from "lucide-react";
+import { LogOut, Users } from "lucide-react";
 import { toast } from "sonner";
 import { useEffect, useState } from "react";
 
@@ -113,6 +113,15 @@ function Painel() {
               {nome}
               {!podeEditarGeral && " · somente leitura (exceto PKS)"}
             </span>
+            {ehDiretoria && (
+              <Button
+                variant={aba === "usuarios" ? "default" : "secondary"}
+                size="sm"
+                onClick={() => setAba("usuarios")}
+              >
+                <Users className="mr-1 size-4" /> Usuários
+              </Button>
+            )}
             <Button
               variant="secondary"
               size="sm"
@@ -123,7 +132,7 @@ function Painel() {
           </div>
         </div>
         <div className="mx-auto flex max-w-[1500px] gap-1 px-4">
-          {ABAS.filter((a) => a.id !== "usuarios" || ehDiretoria).map((a) => (
+          {ABAS.filter((a) => a.id !== "usuarios").map((a) => (
             <button
               key={a.id}
               onClick={() => setAba(a.id)}
