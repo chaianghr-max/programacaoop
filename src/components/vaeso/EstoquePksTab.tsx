@@ -480,6 +480,8 @@ export function EstoquePksTab({ dados, podeEditar = true }: { dados: Dados; pode
                 <td className="px-2 py-1.5 text-right">{fmtInt(totais.saldo)}</td>
                 {podeEditar && <td />}
                 <td className="px-2 py-1.5 text-right">{fmt(totais.pallets, 2)}</td>
+                {podeEditar && <td />}
+
 
               </tr>
             </tfoot>
