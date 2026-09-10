@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, FileUp, Sheet, Trash2 } from "lucide-react";
+import { Check, FileUp, Plus, Sheet, Trash2 } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -40,6 +40,8 @@ export function EstoquePksTab({ dados, podeEditar = true }: { dados: Dados; pode
   const [busca, setBusca] = useState("");
   const [importando, setImportando] = useState(false);
   const [ajustes, setAjustes] = useState<Record<string, string>>({});
+  const [novoSku, setNovoSku] = useState("");
+  const [novaQtde, setNovaQtde] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const qc = useQueryClient();
 
@@ -178,6 +180,31 @@ export function EstoquePksTab({ dados, podeEditar = true }: { dados: Dados; pode
     toast.success(`Saldo de ${sku} ajustado para ${fmtInt(novo)}.`);
   }
 
+  /** Inclui um item no estoque sem vínculo com ordem de compra. */
+  async function incluirItemManual() {
+    const sku = novoSku.trim().toUpperCase();
+    const quantidade = num(novaQtde);
+    if (!sku || !quantidade) {
+      toast.error("Informe o SKU e a quantidade.");
+      return;
+    }
+    const agora = new Date();
+    const { error } = await supabase.from("pks_estoque_baixas").insert({
+      nf_numero: `AJUSTE ${agora.toISOString()}`,
+      nf_data: agora.toLocaleDateString("pt-BR"),
+      sku,
+      quantidade: -quantidade,
+    });
+    if (error) {
+      toast.error(`Falha ao incluir o item: ${error.message}`);
+      return;
+    }
+    setNovoSku("");
+    setNovaQtde("");
+    await qc.invalidateQueries({ queryKey: ["pks-estoque-baixas"] });
+    toast.success(`${fmtInt(quantidade)} unidades de ${sku} incluídas no estoque.`);
+  }
+
   function exportarExcel() {
     const cabecalho = [
       "OC",
@@ -307,6 +334,32 @@ export function EstoquePksTab({ dados, podeEditar = true }: { dados: Dados; pode
           </Button>
         </div>
       </div>
+
+      {podeEditar && (
+        <div className="flex flex-wrap items-end gap-2 rounded-lg border border-border bg-card p-3">
+          <div className="text-[11px] font-semibold uppercase text-muted-foreground">
+            Incluir item avulso (sem ordem)
+          </div>
+          <Input
+            value={novoSku}
+            onChange={(evento) => setNovoSku(evento.target.value)}
+            placeholder="SKU"
+            className="h-8 w-40"
+          />
+          <Input
+            type="number"
+            value={novaQtde}
+            onChange={(evento) => setNovaQtde(evento.target.value)}
+            placeholder="Quantidade"
+            className="h-8 w-32 text-right"
+          />
+          <Button size="sm" onClick={() => void incluirItemManual()}>
+            <Plus className="mr-1 size-4" /> Incluir no estoque
+          </Button>
+        </div>
+      )}
+
+
 
       <div className="max-h-[60vh] overflow-auto rounded-lg border border-border bg-card">
         <table className="w-full min-w-[1080px] text-xs">
