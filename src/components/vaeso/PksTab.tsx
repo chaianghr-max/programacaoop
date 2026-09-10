@@ -48,6 +48,7 @@ export function PksTab({ dados }: { dados: Dados }) {
 
   const { data: entregas = [] } = useQuery({
     queryKey: ["pks-entregas"],
+    refetchInterval: 10_000,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("pks_entregas")
@@ -60,6 +61,7 @@ export function PksTab({ dados }: { dados: Dados }) {
 
   const { data: entregasComponentes = [] } = useQuery({
     queryKey: ["pks-componentes-entregas"],
+    refetchInterval: 10_000,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("pks_componentes_entregas")

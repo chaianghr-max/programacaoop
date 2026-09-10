@@ -77,6 +77,7 @@ export function ProgramacaoTab({
 
   const { data: entregas } = useQuery({
     queryKey: ["ordens-entregas"],
+    refetchInterval: 10_000,
     queryFn: async () => {
       const { data, error } = await supabase.from("ordens_entregas").select("*");
       if (error) throw error;
@@ -91,6 +92,7 @@ export function ProgramacaoTab({
 
   const { data: entregasPks = [] } = useQuery({
     queryKey: ["pks-entregas"],
+    refetchInterval: 10_000,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("pks_entregas")

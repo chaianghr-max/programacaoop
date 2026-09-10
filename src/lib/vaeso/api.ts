@@ -37,7 +37,12 @@ async function carregarDados() {
 export type Dados = Awaited<ReturnType<typeof carregarDados>>;
 
 export function useDados(enabled: boolean) {
-  return useQuery({ queryKey: ["vaeso"], queryFn: carregarDados, enabled });
+  return useQuery({
+    queryKey: ["vaeso"],
+    queryFn: carregarDados,
+    enabled,
+    refetchInterval: enabled ? 15_000 : false,
+  });
 }
 
 export function useSalvar() {
