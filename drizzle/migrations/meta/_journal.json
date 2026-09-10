@@ -57,6 +57,13 @@
       "when": 1789068753743,
       "tag": "0007_create_user_roles_and_restrict_writes",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1789068983310,
+      "tag": "0008_pks_status_cancelado_e_permissoes",
+      "breakpoints": true
     }
   ]
 }

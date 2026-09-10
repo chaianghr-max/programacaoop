@@ -5,14 +5,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 
-const USUARIOS: Record<string, string> = {
-  Diretoria: "diretoria@vaeso.local",
-  Gisele: "gisele@vaeso.local",
-  Luana: "luana@vaeso.local",
-};
 
 export function LoginCard() {
-  const [usuario, setUsuario] = useState("Diretoria");
+  const [usuario, setUsuario] = useState("");
   const [senha, setSenha] = useState("");
   const [erro, setErro] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(false);
@@ -21,7 +16,8 @@ export function LoginCard() {
     e.preventDefault();
     setErro(null);
     setCarregando(true);
-    const email = USUARIOS[usuario] ?? usuario;
+    const login = usuario.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+    const email = usuario.includes("@") ? usuario.trim() : `${login}@vaeso.local`;
     const { error } = await supabase.auth.signInWithPassword({ email, password: senha });
     setCarregando(false);
     if (error) setErro("Usuário ou senha inválidos.");
@@ -41,18 +37,13 @@ export function LoginCard() {
         <div className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="usuario">Usuário</Label>
-            <select
+            <Input
               id="usuario"
               value={usuario}
               onChange={(e) => setUsuario(e.target.value)}
-              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-            >
-              {Object.keys(USUARIOS).map((u) => (
-                <option key={u} value={u}>
-                  {u}
-                </option>
-              ))}
-            </select>
+              autoComplete="username"
+              required
+            />
           </div>
           <div className="space-y-2">
             <Label htmlFor="senha">Senha</Label>

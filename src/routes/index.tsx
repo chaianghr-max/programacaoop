@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { LogOut } from "lucide-react";
+import { LogOut, Users } from "lucide-react";
 import { toast } from "sonner";
 import { useEffect, useState } from "react";
 
@@ -11,6 +11,7 @@ import { PksTab } from "@/components/vaeso/PksTab";
 import { ProdutosTab } from "@/components/vaeso/ProdutosTab";
 import { ProgramacaoTab } from "@/components/vaeso/ProgramacaoTab";
 import { SkusTab } from "@/components/vaeso/SkusTab";
+import { UsuariosTab } from "@/components/vaeso/UsuariosTab";
 import { supabase } from "@/integrations/supabase/client";
 import { useDados, useSalvar } from "@/lib/vaeso/api";
 
@@ -43,6 +44,7 @@ const ABAS = [
   { id: "programacao", label: "Programação" },
   { id: "pks", label: "PKS" },
   { id: "estoque-pks", label: "Estoque PKS" },
+  { id: "usuarios", label: "Usuários" },
 ] as const;
 
 type AbaId = (typeof ABAS)[number]["id"];
@@ -50,26 +52,46 @@ type AbaId = (typeof ABAS)[number]["id"];
 function Painel() {
   const [pronto, setPronto] = useState(false);
   const [email, setEmail] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [papel, setPapel] = useState<"admin" | "pks" | "leitura">("leitura");
   const [aba, setAba] = useState<AbaId>("mp");
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       setEmail(data.session?.user.email ?? null);
+      setUserId(data.session?.user.id ?? null);
       setPronto(true);
     });
     const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
       setEmail(session?.user.email ?? null);
+      setUserId(session?.user.id ?? null);
     });
     return () => sub.subscription.unsubscribe();
   }, []);
 
+  useEffect(() => {
+    if (!userId) {
+      setPapel("leitura");
+      return;
+    }
+    void supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", userId)
+      .then(({ data }) => {
+        const papeis = (data ?? []).map((r) => r.role as string);
+        setPapel(papeis.includes("admin") ? "admin" : papeis.includes("pks") ? "pks" : "leitura");
+      });
+  }, [userId]);
+
   const logado = !!email;
   const { data: dados, isLoading, error } = useDados(logado);
   const salvarMut = useSalvar();
-  const podeEditarGeral = !!email && !email.startsWith("luana");
+  const ehDiretoria = papel === "admin" && !!email && email.startsWith("diretoria");
+  const podeEditarGeral = papel === "admin";
   const salvar = (fn: () => PromiseLike<unknown>) => {
     if (!podeEditarGeral) {
-      toast.error("Seu acesso permite editar apenas as abas PKS e Estoque PKS.");
+      toast.error("Seu acesso não permite editar esta aba.");
       return;
     }
     salvarMut.mutate(fn);
@@ -78,11 +100,8 @@ function Painel() {
   if (!pronto) return <div className="min-h-screen bg-muted" />;
   if (!logado) return <LoginCard />;
 
-  const nome = email?.startsWith("diretoria")
-    ? "Diretoria"
-    : email?.startsWith("luana")
-      ? "Luana"
-      : "Gisele";
+  const nome = (email?.split("@")[0] ?? "").replace(/^./, (c) => c.toUpperCase());
+
 
   return (
     <div className="min-h-screen bg-muted">
@@ -92,8 +111,18 @@ function Painel() {
           <div className="ml-auto flex items-center gap-3 text-sm">
             <span className="opacity-90">
               {nome}
-              {!podeEditarGeral && " · somente leitura (exceto PKS)"}
+              {papel === "pks" && " · edita PKS e Estoque"}
+              {papel === "leitura" && " · somente visualização"}
             </span>
+            {ehDiretoria && (
+              <Button
+                variant={aba === "usuarios" ? "default" : "secondary"}
+                size="sm"
+                onClick={() => setAba("usuarios")}
+              >
+                <Users className="mr-1 size-4" /> Usuários
+              </Button>
+            )}
             <Button
               variant="secondary"
               size="sm"
@@ -104,7 +133,7 @@ function Painel() {
           </div>
         </div>
         <div className="mx-auto flex max-w-[1500px] gap-1 px-4">
-          {ABAS.map((a) => (
+          {ABAS.filter((a) => a.id !== "usuarios").map((a) => (
             <button
               key={a.id}
               onClick={() => setAba(a.id)}
@@ -131,6 +160,7 @@ function Painel() {
             {aba === "programacao" && <ProgramacaoTab dados={dados} salvar={salvar} />}
             {aba === "pks" && <PksTab dados={dados} />}
             {aba === "estoque-pks" && <EstoquePksTab dados={dados} />}
+            {aba === "usuarios" && ehDiretoria && <UsuariosTab />}
           </>
         )}
       </main>
