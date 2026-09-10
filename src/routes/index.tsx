@@ -11,6 +11,7 @@ import { PksTab } from "@/components/vaeso/PksTab";
 import { ProdutosTab } from "@/components/vaeso/ProdutosTab";
 import { ProgramacaoTab } from "@/components/vaeso/ProgramacaoTab";
 import { SkusTab } from "@/components/vaeso/SkusTab";
+import { UsuariosTab } from "@/components/vaeso/UsuariosTab";
 import { supabase } from "@/integrations/supabase/client";
 import { useDados, useSalvar } from "@/lib/vaeso/api";
 
@@ -43,6 +44,7 @@ const ABAS = [
   { id: "programacao", label: "Programação" },
   { id: "pks", label: "PKS" },
   { id: "estoque-pks", label: "Estoque PKS" },
+  { id: "usuarios", label: "Usuários" },
 ] as const;
 
 type AbaId = (typeof ABAS)[number]["id"];
@@ -66,6 +68,7 @@ function Painel() {
   const logado = !!email;
   const { data: dados, isLoading, error } = useDados(logado);
   const salvarMut = useSalvar();
+  const ehDiretoria = !!email && email.startsWith("diretoria");
   const podeEditarGeral = !!email && !email.startsWith("luana");
   const salvar = (fn: () => PromiseLike<unknown>) => {
     if (!podeEditarGeral) {
@@ -104,7 +107,7 @@ function Painel() {
           </div>
         </div>
         <div className="mx-auto flex max-w-[1500px] gap-1 px-4">
-          {ABAS.map((a) => (
+          {ABAS.filter((a) => a.id !== "usuarios" || ehDiretoria).map((a) => (
             <button
               key={a.id}
               onClick={() => setAba(a.id)}
@@ -131,6 +134,7 @@ function Painel() {
             {aba === "programacao" && <ProgramacaoTab dados={dados} salvar={salvar} />}
             {aba === "pks" && <PksTab dados={dados} />}
             {aba === "estoque-pks" && <EstoquePksTab dados={dados} />}
+            {aba === "usuarios" && ehDiretoria && <UsuariosTab />}
           </>
         )}
       </main>
