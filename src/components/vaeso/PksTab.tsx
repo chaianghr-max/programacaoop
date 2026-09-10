@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Calculator, ChevronDown, ChevronRight, Plus, Undo2 } from "lucide-react";
+import { Calculator, ChevronDown, ChevronRight, Lock, LockOpen, Plus, Undo2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
