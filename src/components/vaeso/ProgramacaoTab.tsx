@@ -256,6 +256,31 @@ export function ProgramacaoTab({
     toast.success("Entrega da PKS aceita na Programação.");
   }
 
+  /** Devolve para a PKS a quantidade já aceita nesta linha. */
+  async function devolverParaPks(sku: string) {
+    const chave = sku.trim().toUpperCase();
+    const alvos = ordensSel.filter((o) =>
+      o.itens.some((i) => i.codigo.trim().toUpperCase() === chave),
+    );
+    if (alvos.length === 0) return;
+    for (const ordem of alvos) {
+      const { error } = await supabase.rpc("pks_devolver_linha", {
+        _ordem_id: ordem.id,
+        _sku: sku,
+      });
+      if (error) {
+        toast.error(`Falha ao devolver para a PKS: ${error.message}`);
+        return;
+      }
+    }
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: ["pks-entregas"] }),
+      qc.invalidateQueries({ queryKey: ["ordens-entregas"] }),
+    ]);
+    toast.success("Quantidade devolvida para a PKS.");
+  }
+
+
 
   const qtdePorSku = useMemo(() => {
     if (modo === "manual") return dados.manual;
