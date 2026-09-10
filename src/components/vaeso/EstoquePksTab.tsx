@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { FileUp, Trash2 } from "lucide-react";
+import { Check, FileUp, Sheet, Trash2 } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -7,16 +7,18 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import type { Dados } from "@/lib/vaeso/api";
-import { fmt, fmtInt, produtoDoSku } from "@/lib/vaeso/calc";
+import { fmt, fmtInt, num, produtoDoSku } from "@/lib/vaeso/calc";
 import { parseNfLinhas } from "@/lib/vaeso/nf";
 import { extrairTextoPdf } from "@/lib/vaeso/pdf";
 
-type EntregaAceita = {
+type EntregaPks = {
   id: string;
   ordem_id: string;
   sku: string;
   quantidade: number;
+  status: string;
   accepted_at: string | null;
+  created_at: string;
 };
 
 type Baixa = {
@@ -34,25 +36,28 @@ const normalizar = (valor: string) =>
 const dataBr = (iso: string | null) =>
   iso ? new Date(iso).toLocaleDateString("pt-BR") : "—";
 
-export function EstoquePksTab({ dados }: { dados: Dados }) {
+export function EstoquePksTab({ dados, podeEditar = true }: { dados: Dados; podeEditar?: boolean }) {
   const [busca, setBusca] = useState("");
   const [importando, setImportando] = useState(false);
+  const [ajustes, setAjustes] = useState<Record<string, string>>({});
   const inputRef = useRef<HTMLInputElement>(null);
   const qc = useQueryClient();
 
+  // Apontamentos da PKS: entram no estoque mesmo antes do aceite na Programação.
   const { data: aceitas = [] } = useQuery({
-    queryKey: ["pks-entregas-aceitas"],
-    refetchInterval: 15_000,
+    queryKey: ["pks-entregas", "estoque"],
+    refetchInterval: 10_000,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("pks_entregas")
-        .select("id,ordem_id,sku,quantidade,accepted_at")
-        .eq("status", "aceito")
-        .order("accepted_at");
+        .select("id,ordem_id,sku,quantidade,status,accepted_at,created_at")
+        .neq("status", "cancelado")
+        .order("created_at");
       if (error) throw error;
-      return data as EntregaAceita[];
+      return data as EntregaPks[];
     },
   });
+
 
   const { data: baixas = [] } = useQuery({
     queryKey: ["pks-estoque-baixas"],
@@ -108,10 +113,10 @@ export function EstoquePksTab({ dados }: { dados: Dados }) {
       const atual = obter(item.sku);
       atual.produzido += Number(item.quantidade);
       atual.ocs.add(numeroOrdem.get(item.ordem_id) ?? item.ordem_id);
-      if (!atual.ultima || (item.accepted_at ?? "") > atual.ultima) {
-        atual.ultima = item.accepted_at;
-      }
+      const data = item.accepted_at ?? item.created_at;
+      if (!atual.ultima || data > atual.ultima) atual.ultima = data;
     }
+
     for (const item of baixas) {
       obter(item.sku).baixado += Number(item.quantidade);
     }
@@ -152,6 +157,60 @@ export function EstoquePksTab({ dados }: { dados: Dados }) {
       ),
     [saldos],
   );
+
+  /** Grava a diferença como um ajuste manual de estoque. */
+  async function ajustarSaldo(sku: string, saldoAtual: number) {
+    const novo = num(ajustes[sku]);
+    if (novo === null || novo === saldoAtual) return;
+    const agora = new Date();
+    const { error } = await supabase.from("pks_estoque_baixas").insert({
+      nf_numero: `AJUSTE ${agora.toISOString()}`,
+      nf_data: agora.toLocaleDateString("pt-BR"),
+      sku,
+      quantidade: saldoAtual - novo,
+    });
+    if (error) {
+      toast.error(`Falha ao ajustar o saldo: ${error.message}`);
+      return;
+    }
+    setAjustes((atual) => ({ ...atual, [sku]: "" }));
+    await qc.invalidateQueries({ queryKey: ["pks-estoque-baixas"] });
+    toast.success(`Saldo de ${sku} ajustado para ${fmtInt(novo)}.`);
+  }
+
+  function exportarExcel() {
+    const cabecalho = [
+      "OC",
+      "Tipo",
+      "SKU",
+      "Descrição",
+      "Última produção",
+      "Produzido",
+      "Baixado (NF)",
+      "Saldo",
+      "Pallets",
+    ];
+    const linhas = saldos.map((item) => [
+      item.ocs,
+      item.tipo,
+      item.sku,
+      item.descricao,
+      dataBr(item.ultima),
+      item.produzido,
+      item.baixado,
+      item.saldo,
+      item.pallets === null ? "" : item.pallets.toFixed(2).replace(".", ","),
+    ]);
+    const csv = [cabecalho, ...linhas]
+      .map((linha) => linha.map((celula) => `"${String(celula).replace(/"/g, '""')}"`).join(";"))
+      .join("\r\n");
+    const url = URL.createObjectURL(new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `estoque-pks-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
 
 
   async function importarNf(file: File) {
@@ -239,7 +298,10 @@ export function EstoquePksTab({ dados }: { dados: Dados }) {
               if (file) void importarNf(file);
             }}
           />
-          <Button size="sm" disabled={importando} onClick={() => inputRef.current?.click()}>
+          <Button size="sm" variant="outline" disabled={saldos.length === 0} onClick={exportarExcel}>
+            <Sheet className="mr-1 size-4" /> Salvar em Excel
+          </Button>
+          <Button size="sm" disabled={importando || !podeEditar} onClick={() => inputRef.current?.click()}>
             <FileUp className="mr-1 size-4" />
             {importando ? "Lendo NF..." : "Importar NF (PDF)"}
           </Button>
@@ -247,7 +309,7 @@ export function EstoquePksTab({ dados }: { dados: Dados }) {
       </div>
 
       <div className="max-h-[60vh] overflow-auto rounded-lg border border-border bg-card">
-        <table className="w-full min-w-[980px] text-xs">
+        <table className="w-full min-w-[1080px] text-xs">
           <thead className="sticky top-0 z-10 bg-grid-head text-grid-head-foreground">
             <tr>
               <th className="px-2 py-1.5 text-left uppercase">OC</th>
@@ -258,6 +320,7 @@ export function EstoquePksTab({ dados }: { dados: Dados }) {
               <th className="px-2 py-1.5 text-right uppercase">Produzido</th>
               <th className="px-2 py-1.5 text-right uppercase">Baixado (NF)</th>
               <th className="px-2 py-1.5 text-right uppercase">Saldo</th>
+              {podeEditar && <th className="px-2 py-1.5 text-center uppercase">Ajustar saldo</th>}
               <th className="px-2 py-1.5 text-right uppercase">Pallets</th>
             </tr>
           </thead>
@@ -272,17 +335,42 @@ export function EstoquePksTab({ dados }: { dados: Dados }) {
                 <td className="px-2 py-1 text-right">{fmtInt(item.produzido)}</td>
                 <td className="px-2 py-1 text-right">{fmtInt(item.baixado)}</td>
                 <td className="px-2 py-1 text-right font-bold">{fmtInt(item.saldo)}</td>
+                {podeEditar && (
+                  <td className="px-2 py-1">
+                    <div className="flex items-center justify-end gap-1">
+                      <Input
+                        type="number"
+                        value={ajustes[item.sku] ?? ""}
+                        placeholder={fmtInt(item.saldo)}
+                        onChange={(evento) =>
+                          setAjustes((atual) => ({ ...atual, [item.sku]: evento.target.value }))
+                        }
+                        className="h-7 w-24 text-right"
+                      />
+                      <Button
+                        size="icon"
+                        className="size-7"
+                        title="Gravar novo saldo"
+                        disabled={!ajustes[item.sku]}
+                        onClick={() => void ajustarSaldo(item.sku, item.saldo)}
+                      >
+                        <Check className="size-4" />
+                      </Button>
+                    </div>
+                  </td>
+                )}
                 <td className="px-2 py-1 text-right">{item.pallets === null ? "—" : fmt(item.pallets, 2)}</td>
               </tr>
             ))}
             {saldos.length === 0 && (
               <tr>
-                <td colSpan={9} className="px-3 py-8 text-center text-muted-foreground">
-                  Nenhum apontamento aceito na Programação até o momento.
+                <td colSpan={podeEditar ? 10 : 9} className="px-3 py-8 text-center text-muted-foreground">
+                  Nenhum apontamento da PKS até o momento.
                 </td>
               </tr>
             )}
           </tbody>
+
           {saldos.length > 0 && (
             <tfoot className="sticky bottom-0 bg-secondary font-bold">
               <tr className="border-t-2 border-border">
@@ -292,7 +380,9 @@ export function EstoquePksTab({ dados }: { dados: Dados }) {
                 <td className="px-2 py-1.5 text-right">{fmtInt(totais.produzido)}</td>
                 <td className="px-2 py-1.5 text-right">{fmtInt(totais.baixado)}</td>
                 <td className="px-2 py-1.5 text-right">{fmtInt(totais.saldo)}</td>
+                {podeEditar && <td />}
                 <td className="px-2 py-1.5 text-right">{fmt(totais.pallets, 2)}</td>
+
               </tr>
             </tfoot>
           )}

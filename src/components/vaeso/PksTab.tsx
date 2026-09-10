@@ -189,8 +189,7 @@ export function PksTab({ dados }: { dados: Dados }) {
 
   async function lancarPrincipal(linha: LinhaPks) {
     const campo = `principal|${linha.key}`;
-    const saldo = Math.max(0, linha.quantidade - totalPrincipal(linha.ordemId, linha.skuCodigo));
-    const quantidade = Math.min(Math.max(0, num(entradas[campo]) ?? 0), saldo);
+    const quantidade = Math.max(0, num(entradas[campo]) ?? 0);
     if (!quantidade) return;
     setSalvando(campo);
     const { error } = await supabase.from("pks_entregas").insert({
@@ -210,10 +209,9 @@ export function PksTab({ dados }: { dados: Dados }) {
 
   async function lancarComponente(linha: LinhaPks, componenteId: string) {
     const campo = `componente|${linha.key}|${componenteId}`;
-    const produzido = totalComponente(linha.ordemId, linha.skuCodigo, componenteId);
-    const saldo = Math.max(0, linha.quantidade - produzido);
-    const quantidade = Math.min(Math.max(0, num(entradas[campo]) ?? 0), saldo);
+    const quantidade = Math.max(0, num(entradas[campo]) ?? 0);
     if (!quantidade) return;
+
     setSalvando(campo);
     const { error } = await supabase.from("pks_componentes_entregas").insert({
       ordem_id: linha.ordemId,
@@ -576,15 +574,15 @@ function FragmentoLinha({
             <Input
               type="number"
               min="0"
-              max={saldo}
               value={entrada}
               onChange={(evento) => onEntrada(evento.target.value)}
               placeholder={fmtInt(produzido)}
               className="h-7 w-20 text-right font-bold"
             />
-            <Button size="icon" className="size-7" disabled={!saldo || salvando === campo} onClick={onLancar} title="Somar entrega">
+            <Button size="icon" className="size-7" disabled={salvando === campo} onClick={onLancar} title="Somar entrega (pode passar da quantidade da OC)">
               <Plus className="size-4" />
             </Button>
+
             <Button
               size="icon"
               variant="outline"
@@ -620,15 +618,15 @@ function FragmentoLinha({
               <Input
                 type="number"
                 min="0"
-                max={componente.saldo}
                 value={componente.entrada}
                 onChange={(evento) => componente.onEntrada(evento.target.value)}
                 placeholder={fmtInt(componente.feito)}
                 className="h-7 w-20 text-right font-semibold"
               />
-              <Button size="icon" variant="outline" className="size-7" disabled={!componente.saldo || salvando === componente.campo} onClick={componente.onLancar} title="Somar produção do item">
+              <Button size="icon" variant="outline" className="size-7" disabled={salvando === componente.campo} onClick={componente.onLancar} title="Somar produção do item (pode passar da quantidade da OC)">
                 <Plus className="size-3" />
               </Button>
+
               <Button
                 size="icon"
                 variant="ghost"
