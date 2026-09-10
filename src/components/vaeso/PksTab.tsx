@@ -589,12 +589,13 @@ function FragmentoLinha({
               size="icon"
               variant="outline"
               className="size-7"
-              disabled={!pendente}
+              disabled={!produzido && !pendente}
               onClick={onEstornar}
-              title="Estornar quantidade enviada e ainda pendente"
+              title="Retornar toda a quantidade entregue desta linha"
             >
               <Undo2 className="size-3" />
             </Button>
+
           </div>
         </td>
         <td className="bg-secondary/70 px-2 py-1 text-right text-sm font-bold">{fmtInt(saldo)}</td>
