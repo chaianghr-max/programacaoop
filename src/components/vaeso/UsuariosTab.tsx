@@ -1,22 +1,23 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ABAS_PERM, type PermissoesAbas } from "@/lib/vaeso/permissoes";
 import {
   alterarSenha,
   criarUsuario,
-  definirPermissao,
+  definirPermissoesAbas,
   excluirUsuario,
   listarUsuarios,
   type Permissao,
 } from "@/lib/vaeso/usuarios.functions";
 
-const PERMISSOES: Array<{ id: Permissao; label: string }> = [
+const PERFIS: Array<{ id: Permissao; label: string }> = [
   { id: "leitura", label: "Somente visualização" },
   { id: "pks", label: "Editar PKS e Estoque PKS" },
   { id: "admin", label: "Editar tudo (Diretoria)" },
@@ -26,7 +27,7 @@ export function UsuariosTab() {
   const qc = useQueryClient();
   const listar = useServerFn(listarUsuarios);
   const criar = useServerFn(criarUsuario);
-  const definir = useServerFn(definirPermissao);
+  const definir = useServerFn(definirPermissoesAbas);
   const excluir = useServerFn(excluirUsuario);
   const trocarSenha = useServerFn(alterarSenha);
 
@@ -54,9 +55,9 @@ export function UsuariosTab() {
   });
 
   const permissaoMut = useMutation({
-    mutationFn: (v: { userId: string; permissao: Permissao }) => definir({ data: v }),
+    mutationFn: (v: { userId: string; permissoes: PermissoesAbas }) => definir({ data: v }),
     onSuccess: () => {
-      toast.success("Permissão atualizada.");
+      toast.success("Permissões atualizadas.");
       void recarregar();
     },
     onError: (e: Error) => toast.error(e.message),
@@ -113,14 +114,14 @@ export function UsuariosTab() {
             />
           </div>
           <div className="space-y-1">
-            <Label htmlFor="nova-permissao">Permissão</Label>
+            <Label htmlFor="nova-permissao">Perfil inicial</Label>
             <select
               id="nova-permissao"
               value={permissao}
               onChange={(e) => setPermissao(e.target.value as Permissao)}
               className="h-10 rounded-md border border-input bg-background px-3 text-sm"
             >
-              {PERMISSOES.map((p) => (
+              {PERFIS.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.label}
                 </option>
@@ -133,101 +134,116 @@ export function UsuariosTab() {
         </form>
       </section>
 
-      <section className="rounded-xl border border-border bg-card p-4">
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+      <section className="space-y-4">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
           Usuários cadastrados
         </h2>
         {isLoading && <p className="text-sm text-muted-foreground">Carregando...</p>}
         {error && <p className="text-sm text-destructive">{(error as Error).message}</p>}
-        {usuarios && (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border text-left text-xs uppercase text-muted-foreground">
-                <th className="py-2">Usuário</th>
-                <th className="py-2">Permissão</th>
-                <th className="py-2">Nova senha</th>
-                <th className="py-2 text-right">Ações</th>
-              </tr>
-            </thead>
-            <tbody>
-              {usuarios.map((u) => (
-                <LinhaUsuario
-                  key={u.id}
-                  email={u.email}
-                  permissao={u.permissao}
-                  onPermissao={(p) => permissaoMut.mutate({ userId: u.id, permissao: p })}
-                  onSenha={(s) => senhaMut.mutate({ userId: u.id, senha: s })}
-                  onExcluir={() => {
-                    if (confirm(`Excluir o acesso de ${u.email.split("@")[0]}?`)) {
-                      excluirMut.mutate(u.id);
-                    }
-                  }}
-                />
-              ))}
-            </tbody>
-          </table>
-        )}
+        {usuarios?.map((u) => (
+          <CartaoUsuario
+            key={u.id}
+            email={u.email}
+            permissoes={u.permissoes}
+            salvando={permissaoMut.isPending}
+            onPermissoes={(p) => permissaoMut.mutate({ userId: u.id, permissoes: p })}
+            onSenha={(s) => senhaMut.mutate({ userId: u.id, senha: s })}
+            onExcluir={() => {
+              if (confirm(`Excluir o acesso de ${u.email.split("@")[0]}?`)) {
+                excluirMut.mutate(u.id);
+              }
+            }}
+          />
+        ))}
       </section>
     </div>
   );
 }
 
-function LinhaUsuario({
+function CartaoUsuario({
   email,
-  permissao,
-  onPermissao,
+  permissoes,
+  salvando,
+  onPermissoes,
   onSenha,
   onExcluir,
 }: {
   email: string;
-  permissao: Permissao;
-  onPermissao: (p: Permissao) => void;
+  permissoes: PermissoesAbas;
+  salvando: boolean;
+  onPermissoes: (p: PermissoesAbas) => void;
   onSenha: (s: string) => void;
   onExcluir: () => void;
 }) {
   const [senha, setSenha] = useState("");
+  const [local, setLocal] = useState<PermissoesAbas>(permissoes);
+
+  useEffect(() => setLocal(permissoes), [permissoes]);
+
+  const alterado = ABAS_PERM.some((a) => local[a.id] !== permissoes[a.id]);
+  const definirTodas = (nivel: "ver" | "editar") =>
+    setLocal(Object.fromEntries(ABAS_PERM.map((a) => [a.id, nivel])) as PermissoesAbas);
+
   return (
-    <tr className="border-b border-border/60 even:bg-muted/40">
-      <td className="py-2 font-medium capitalize">{email.split("@")[0]}</td>
-      <td className="py-2">
-        <select
-          value={permissao}
-          onChange={(e) => onPermissao(e.target.value as Permissao)}
-          className="h-9 rounded-md border border-input bg-background px-2 text-sm"
-        >
-          {PERMISSOES.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.label}
-            </option>
-          ))}
-        </select>
-      </td>
-      <td className="py-2">
-        <div className="flex gap-2">
-          <Input
-            value={senha}
-            onChange={(e) => setSenha(e.target.value)}
-            placeholder="nova senha"
-            className="h-9 w-40"
-          />
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={senha.length < 6}
-            onClick={() => {
-              onSenha(senha);
-              setSenha("");
-            }}
-          >
-            Salvar
+    <div className="rounded-xl border border-border bg-card p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm font-semibold capitalize">{email.split("@")[0]}</p>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => definirTodas("ver")}>
+            Tudo visualizar
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => definirTodas("editar")}>
+            Tudo alterar
+          </Button>
+          <Button variant="destructive" size="sm" onClick={onExcluir}>
+            <Trash2 className="size-4" />
           </Button>
         </div>
-      </td>
-      <td className="py-2 text-right">
-        <Button variant="destructive" size="sm" onClick={onExcluir}>
-          <Trash2 className="size-4" />
+      </div>
+
+      <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        {ABAS_PERM.map((aba) => (
+          <div
+            key={aba.id}
+            className="flex items-center justify-between gap-2 rounded-md border border-border/60 px-3 py-2"
+          >
+            <span className="text-sm">{aba.label}</span>
+            <select
+              value={local[aba.id]}
+              onChange={(e) =>
+                setLocal((atual) => ({ ...atual, [aba.id]: e.target.value as "ver" | "editar" }))
+              }
+              className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+            >
+              <option value="ver">Somente visualizar</option>
+              <option value="editar">Alterar / excluir</option>
+            </select>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <Button size="sm" disabled={!alterado || salvando} onClick={() => onPermissoes(local)}>
+          Salvar permissões
         </Button>
-      </td>
-    </tr>
+        <Input
+          value={senha}
+          onChange={(e) => setSenha(e.target.value)}
+          placeholder="nova senha"
+          className="h-9 w-40"
+        />
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={senha.length < 6}
+          onClick={() => {
+            onSenha(senha);
+            setSenha("");
+          }}
+        >
+          Salvar senha
+        </Button>
+      </div>
+    </div>
   );
 }
