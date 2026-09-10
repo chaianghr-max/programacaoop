@@ -601,7 +601,7 @@ function FragmentoLinha({
               min="0"
               value={entrada}
               onChange={(evento) => onEntrada(evento.target.value)}
-              placeholder={fmtInt(produzido)}
+              placeholder="0"
               className="h-7 w-20 text-right font-bold"
             />
             <Button size="icon" className="size-7" disabled={salvando === campo} onClick={onLancar} title="Somar entrega (pode passar da quantidade da OC)">
@@ -645,7 +645,7 @@ function FragmentoLinha({
                 min="0"
                 value={componente.entrada}
                 onChange={(evento) => componente.onEntrada(evento.target.value)}
-                placeholder={fmtInt(componente.feito)}
+                placeholder="0"
                 className="h-7 w-20 text-right font-semibold"
               />
               <Button size="icon" variant="outline" className="size-7" disabled={salvando === componente.campo} onClick={componente.onLancar} title="Somar produção do item (pode passar da quantidade da OC)">
