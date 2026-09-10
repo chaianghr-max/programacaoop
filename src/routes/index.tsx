@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { LoginCard } from "@/components/vaeso/LoginCard";
 import { MpTab } from "@/components/vaeso/MpTab";
+import { PksTab } from "@/components/vaeso/PksTab";
 import { ProdutosTab } from "@/components/vaeso/ProdutosTab";
 import { ProgramacaoTab } from "@/components/vaeso/ProgramacaoTab";
 import { SkusTab } from "@/components/vaeso/SkusTab";
@@ -26,6 +27,8 @@ export const Route = createFileRoute("/")({
         content: "Controle de matérias-primas, produtos, SKUs e programação de produção da VAESO.",
       },
       { name: "robots", content: "noindex" },
+       { property: "og:type", content: "website" },
+       { name: "twitter:card", content: "summary" },
     ],
   }),
   component: Painel,
@@ -36,6 +39,7 @@ const ABAS = [
   { id: "produtos", label: "Ficha de Produtos" },
   { id: "skus", label: "SKU's" },
   { id: "programacao", label: "Programação" },
+  { id: "pks", label: "PKS" },
 ] as const;
 
 type AbaId = (typeof ABAS)[number]["id"];
@@ -108,6 +112,7 @@ function Painel() {
             {aba === "produtos" && <ProdutosTab dados={dados} salvar={salvar} />}
             {aba === "skus" && <SkusTab dados={dados} salvar={salvar} />}
             {aba === "programacao" && <ProgramacaoTab dados={dados} salvar={salvar} />}
+            {aba === "pks" && <PksTab dados={dados} />}
           </>
         )}
       </main>
