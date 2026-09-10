@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { LogOut } from "lucide-react";
+import { toast } from "sonner";
 import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -65,12 +66,23 @@ function Painel() {
   const logado = !!email;
   const { data: dados, isLoading, error } = useDados(logado);
   const salvarMut = useSalvar();
-  const salvar = (fn: () => PromiseLike<unknown>) => salvarMut.mutate(fn);
+  const podeEditarGeral = !!email && !email.startsWith("luana");
+  const salvar = (fn: () => PromiseLike<unknown>) => {
+    if (!podeEditarGeral) {
+      toast.error("Seu acesso permite editar apenas as abas PKS e Estoque PKS.");
+      return;
+    }
+    salvarMut.mutate(fn);
+  };
 
   if (!pronto) return <div className="min-h-screen bg-muted" />;
   if (!logado) return <LoginCard />;
 
-  const nome = email?.startsWith("diretoria") ? "Diretoria" : "Gisele";
+  const nome = email?.startsWith("diretoria")
+    ? "Diretoria"
+    : email?.startsWith("luana")
+      ? "Luana"
+      : "Gisele";
 
   return (
     <div className="min-h-screen bg-muted">
@@ -78,7 +90,10 @@ function Painel() {
         <div className="mx-auto flex max-w-[1500px] flex-wrap items-center gap-3 px-4 py-3">
           <h1 className="text-lg font-bold tracking-tight">VAESO · Produção &amp; Compras</h1>
           <div className="ml-auto flex items-center gap-3 text-sm">
-            <span className="opacity-90">{nome}</span>
+            <span className="opacity-90">
+              {nome}
+              {!podeEditarGeral && " · somente leitura (exceto PKS)"}
+            </span>
             <Button
               variant="secondary"
               size="sm"

@@ -275,59 +275,11 @@ export function PksTab({ dados }: { dados: Dados }) {
     await qc.invalidateQueries({ queryKey: ["pks-componentes-entregas"] });
   }
 
-  async function marcarTodas() {
-    const registros = linhas
-      .map((linha) => ({
-        ordem_id: linha.ordemId,
-        sku: linha.skuCodigo,
-        quantidade: Math.max(
-          0,
-          linha.quantidade - totalPrincipal(linha.ordemId, linha.skuCodigo),
-        ),
-      }))
-      .filter((registro) => registro.quantidade > 0);
-    if (registros.length === 0) {
-      toast.info("Todas as linhas já estão com entrega completa.");
-      return;
-    }
-    setSalvando("todas");
-    const { error } = await supabase.from("pks_entregas").insert(registros);
-    setSalvando(null);
-    if (error) {
-      toast.error(`Falha ao marcar todas: ${error.message}`);
-      return;
-    }
-    await qc.invalidateQueries({ queryKey: ["pks-entregas"] });
-    toast.success(`${registros.length} linhas marcadas como entregues.`);
-  }
-
-  async function desmarcarTodas() {
-    const chaves = new Set(linhas.map((linha) => `${linha.ordemId}|${normalizar(linha.skuCodigo)}`));
-    const alvos = ativas.filter(
-      (item) => item.status === "pendente" && chaves.has(`${item.ordem_id}|${normalizar(item.sku)}`),
-    );
-    if (alvos.length === 0) {
-      toast.info("Não há lançamentos pendentes para desmarcar.");
-      return;
-    }
-    setSalvando("todas");
-    const { error } = await supabase
-      .from("pks_entregas")
-      .update({ status: "cancelado" })
-      .in("id", alvos.map((item) => item.id));
-    setSalvando(null);
-    if (error) {
-      toast.error(`Falha ao desmarcar: ${error.message}`);
-      return;
-    }
-    await qc.invalidateQueries({ queryKey: ["pks-entregas"] });
-    toast.success("Lançamentos pendentes desmarcados.");
-  }
-
   const alternarOrdem = (id: string) =>
     setSelecionadas((atual) =>
       atual.includes(id) ? atual.filter((item) => item !== id) : [...atual, id],
     );
+
 
   return (
     <div className="space-y-4">
@@ -337,23 +289,22 @@ export function PksTab({ dados }: { dados: Dados }) {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => setSelecionadas(selecionadas.length === ordens.length ? [] : ordens.map((o) => o.id))}
+            disabled={ordens.length === 0}
+            onClick={() => setSelecionadas(ordens.map((o) => o.id))}
           >
-            {selecionadas.length === ordens.length && ordens.length > 0 ? "Limpar seleção" : "Selecionar todas"}
-          </Button>
-          <Button size="sm" disabled={salvando === "todas"} onClick={() => void marcarTodas()}>
-            Marcar todas como entregues
+            Selecionar todas
           </Button>
           <Button
             variant="outline"
             size="sm"
-            disabled={salvando === "todas"}
-            onClick={() => void desmarcarTodas()}
+            disabled={selecionadas.length === 0}
+            onClick={() => setSelecionadas([])}
           >
             Desmarcar todas
           </Button>
         </div>
       </div>
+
 
       <div className="flex flex-wrap gap-2">
         {ordens.map((ordem) => {

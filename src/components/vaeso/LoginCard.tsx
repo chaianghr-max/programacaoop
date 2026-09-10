@@ -8,6 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 const USUARIOS: Record<string, string> = {
   Diretoria: "diretoria@vaeso.local",
   Gisele: "gisele@vaeso.local",
+  Luana: "luana@vaeso.local",
 };
 
 export function LoginCard() {
