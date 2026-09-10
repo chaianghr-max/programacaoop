@@ -189,8 +189,7 @@ export function PksTab({ dados }: { dados: Dados }) {
 
   async function lancarPrincipal(linha: LinhaPks) {
     const campo = `principal|${linha.key}`;
-    const saldo = Math.max(0, linha.quantidade - totalPrincipal(linha.ordemId, linha.skuCodigo));
-    const quantidade = Math.min(Math.max(0, num(entradas[campo]) ?? 0), saldo);
+    const quantidade = Math.max(0, num(entradas[campo]) ?? 0);
     if (!quantidade) return;
     setSalvando(campo);
     const { error } = await supabase.from("pks_entregas").insert({
@@ -210,10 +209,9 @@ export function PksTab({ dados }: { dados: Dados }) {
 
   async function lancarComponente(linha: LinhaPks, componenteId: string) {
     const campo = `componente|${linha.key}|${componenteId}`;
-    const produzido = totalComponente(linha.ordemId, linha.skuCodigo, componenteId);
-    const saldo = Math.max(0, linha.quantidade - produzido);
-    const quantidade = Math.min(Math.max(0, num(entradas[campo]) ?? 0), saldo);
+    const quantidade = Math.max(0, num(entradas[campo]) ?? 0);
     if (!quantidade) return;
+
     setSalvando(campo);
     const { error } = await supabase.from("pks_componentes_entregas").insert({
       ordem_id: linha.ordemId,
