@@ -160,6 +160,77 @@ export type Database = {
         }
         Relationships: []
       }
+      pks_componentes_entregas: {
+        Row: {
+          componente_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          ordem_id: string
+          quantidade: number
+          sku: string
+        }
+        Insert: {
+          componente_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          ordem_id: string
+          quantidade: number
+          sku: string
+        }
+        Update: {
+          componente_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          ordem_id?: string
+          quantidade?: number
+          sku?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pks_componentes_entregas_componente_id_fkey"
+            columns: ["componente_id"]
+            isOneToOne: false
+            referencedRelation: "componentes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pks_entregas: {
+        Row: {
+          accepted_at: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          ordem_id: string
+          quantidade: number
+          sku: string
+          status: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          ordem_id: string
+          quantidade: number
+          sku: string
+          status?: string
+        }
+        Update: {
+          accepted_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          ordem_id?: string
+          quantidade?: number
+          sku?: string
+          status?: string
+        }
+        Relationships: []
+      }
       produtos: {
         Row: {
           caixa_tipo: string | null
@@ -260,7 +331,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      pks_aceitar_entrega: { Args: { _entrega_id: string }; Returns: number }
     }
     Enums: {
       [_ in never]: never

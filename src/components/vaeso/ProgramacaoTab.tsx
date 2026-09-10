@@ -77,6 +77,7 @@ export function ProgramacaoTab({
 
   const { data: entregas } = useQuery({
     queryKey: ["ordens-entregas"],
+    refetchInterval: 10_000,
     queryFn: async () => {
       const { data, error } = await supabase.from("ordens_entregas").select("*");
       if (error) throw error;
@@ -85,6 +86,26 @@ export function ProgramacaoTab({
         sku: string;
         entregue: boolean;
         qtde_entregue: number | null;
+      }>;
+    },
+  });
+
+  const { data: entregasPks = [] } = useQuery({
+    queryKey: ["pks-entregas"],
+    refetchInterval: 10_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("pks_entregas")
+        .select("id,ordem_id,sku,quantidade,status")
+        .eq("status", "pendente")
+        .order("created_at");
+      if (error) throw error;
+      return data as Array<{
+        id: string;
+        ordem_id: string;
+        sku: string;
+        quantidade: number;
+        status: string;
       }>;
     },
   });
@@ -98,6 +119,20 @@ export function ProgramacaoTab({
     }
     return m;
   }, [entregas]);
+
+  const pendentePksMap = useMemo(() => {
+    const mapa: Record<string, number> = {};
+    for (const entrega of entregasPks) {
+      const chave = `${entrega.ordem_id}|${entrega.sku.trim().toUpperCase()}`;
+      mapa[chave] = (mapa[chave] ?? 0) + Number(entrega.quantidade);
+    }
+    return mapa;
+  }, [entregasPks]);
+
+  const ordensComPendentePks = useMemo(
+    () => new Set(entregasPks.map((entrega) => entrega.ordem_id)),
+    [entregasPks],
+  );
 
 
   type OrdemPainel = {
@@ -195,6 +230,30 @@ export function ProgramacaoTab({
       }
     }
     void qc.invalidateQueries({ queryKey: ["ordens-entregas"] });
+  }
+
+  async function aceitarEntregasPks(sku: string) {
+    const chave = sku.trim().toUpperCase();
+    const pendentes = entregasPks.filter(
+      (entrega) =>
+        selecionadas.includes(entrega.ordem_id) &&
+        entrega.sku.trim().toUpperCase() === chave,
+    );
+    if (pendentes.length === 0) return;
+    for (const entrega of pendentes) {
+      const { error } = await supabase.rpc("pks_aceitar_entrega", {
+        _entrega_id: entrega.id,
+      });
+      if (error) {
+        toast.error(`Falha ao aceitar entrega PKS: ${error.message}`);
+        return;
+      }
+    }
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: ["pks-entregas"] }),
+      qc.invalidateQueries({ queryKey: ["ordens-entregas"] }),
+    ]);
+    toast.success("Entrega da PKS aceita na Programação.");
   }
 
 
@@ -517,13 +576,16 @@ export function ProgramacaoTab({
                   {lista.map((o) => {
                     const pct = pctEntregue(o);
                     const sel = selecionadas.includes(o.id);
+                     const temPendentePks = ordensComPendentePks.has(o.id);
                     return (
                       <div
                         key={o.id}
                         className={`relative min-w-[112px] rounded-md border transition-colors ${
                           sel
                             ? "border-primary bg-primary text-primary-foreground"
-                            : "border-border bg-background hover:bg-accent"
+                             : temPendentePks
+                               ? "border-emb-head-foreground bg-emb-cell hover:bg-accent"
+                               : "border-border bg-background hover:bg-accent"
                         }`}
                       >
                         <button
@@ -541,6 +603,11 @@ export function ProgramacaoTab({
                             />
                           </div>
                           <div className="text-[10px] font-semibold">{fmt(pct, 0)}% entregue</div>
+                           {temPendentePks && (
+                             <div className={`mt-0.5 text-[10px] font-bold ${sel ? "text-primary-foreground" : "text-emb-head-foreground"}`}>
+                               Entrega PKS pendente
+                             </div>
+                           )}
                         </button>
                         {o.slot !== null && (
                           <button
@@ -749,6 +816,17 @@ export function ProgramacaoTab({
                 const saldo = Math.max(0, l.quantidade - entregueQtde);
                 const entregue = alvos.length > 0 && l.quantidade > 0 && saldo === 0;
                 const parcial = entregueQtde > 0 && !entregue;
+                 const pendentesDaLinha = alvos.flatMap((o) =>
+                   entregasPks.filter(
+                     (item) =>
+                       item.ordem_id === o.id &&
+                       item.sku.trim().toUpperCase() === chaveSku,
+                   ),
+                 );
+                 const quantidadePendentePks = pendentesDaLinha.reduce(
+                   (soma, item) => soma + Number(item.quantidade),
+                   0,
+                 );
                 return (
                   <tr
                     key={l.sku.id}
@@ -787,6 +865,20 @@ export function ProgramacaoTab({
                             <Check className="size-3" />
                           </button>
                         </div>
+                       {quantidadePendentePks > 0 && (
+                         <div className="mt-1 flex items-center justify-end gap-1 whitespace-nowrap">
+                           <span className="rounded bg-emb-cell px-1 py-0.5 text-[10px] font-bold text-emb-head-foreground">
+                             +{fmtInt(quantidadePendentePks)} PKS
+                           </span>
+                           <Button
+                             size="sm"
+                             className="h-6 px-2 text-[10px]"
+                             onClick={() => void aceitarEntregasPks(l.sku.sku)}
+                           >
+                             Aceitar
+                           </Button>
+                         </div>
+                       )}
                       </td>
                     )}
                     <td className="px-1 py-0.5 text-right font-bold">
