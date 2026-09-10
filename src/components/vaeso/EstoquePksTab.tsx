@@ -178,6 +178,31 @@ export function EstoquePksTab({ dados, podeEditar = true }: { dados: Dados; pode
     toast.success(`Saldo de ${sku} ajustado para ${fmtInt(novo)}.`);
   }
 
+  /** Inclui um item no estoque sem vínculo com ordem de compra. */
+  async function incluirItemManual() {
+    const sku = novoSku.trim().toUpperCase();
+    const quantidade = num(novaQtde);
+    if (!sku || !quantidade) {
+      toast.error("Informe o SKU e a quantidade.");
+      return;
+    }
+    const agora = new Date();
+    const { error } = await supabase.from("pks_estoque_baixas").insert({
+      nf_numero: `AJUSTE ${agora.toISOString()}`,
+      nf_data: agora.toLocaleDateString("pt-BR"),
+      sku,
+      quantidade: -quantidade,
+    });
+    if (error) {
+      toast.error(`Falha ao incluir o item: ${error.message}`);
+      return;
+    }
+    setNovoSku("");
+    setNovaQtde("");
+    await qc.invalidateQueries({ queryKey: ["pks-estoque-baixas"] });
+    toast.success(`${fmtInt(quantidade)} unidades de ${sku} incluídas no estoque.`);
+  }
+
   function exportarExcel() {
     const cabecalho = [
       "OC",
