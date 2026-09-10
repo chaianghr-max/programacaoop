@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { LogOut } from "lucide-react";
+import { toast } from "sonner";
 import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -89,7 +90,10 @@ function Painel() {
         <div className="mx-auto flex max-w-[1500px] flex-wrap items-center gap-3 px-4 py-3">
           <h1 className="text-lg font-bold tracking-tight">VAESO · Produção &amp; Compras</h1>
           <div className="ml-auto flex items-center gap-3 text-sm">
-            <span className="opacity-90">{nome}</span>
+            <span className="opacity-90">
+              {nome}
+              {!podeEditarGeral && " · somente leitura (exceto PKS)"}
+            </span>
             <Button
               variant="secondary"
               size="sm"
