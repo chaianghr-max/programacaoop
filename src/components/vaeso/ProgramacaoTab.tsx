@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Boxes, Check, Download, FileText, RefreshCw } from "lucide-react";
+import { Boxes, Check, Download, FileText, RefreshCw, Undo2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -255,6 +255,31 @@ export function ProgramacaoTab({
     ]);
     toast.success("Entrega da PKS aceita na Programação.");
   }
+
+  /** Devolve para a PKS a quantidade já aceita nesta linha. */
+  async function devolverParaPks(sku: string) {
+    const chave = sku.trim().toUpperCase();
+    const alvos = ordensSel.filter((o) =>
+      o.itens.some((i) => i.codigo.trim().toUpperCase() === chave),
+    );
+    if (alvos.length === 0) return;
+    for (const ordem of alvos) {
+      const { error } = await supabase.rpc("pks_devolver_linha", {
+        _ordem_id: ordem.id,
+        _sku: sku,
+      });
+      if (error) {
+        toast.error(`Falha ao devolver para a PKS: ${error.message}`);
+        return;
+      }
+    }
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: ["pks-entregas"] }),
+      qc.invalidateQueries({ queryKey: ["ordens-entregas"] }),
+    ]);
+    toast.success("Quantidade devolvida para a PKS.");
+  }
+
 
 
   const qtdePorSku = useMemo(() => {
@@ -864,7 +889,17 @@ export function ProgramacaoTab({
                           >
                             <Check className="size-3" />
                           </button>
+                          {entregueQtde > 0 && (
+                            <button
+                              title="Devolver esta quantidade para a PKS"
+                              onClick={() => void devolverParaPks(l.sku.sku)}
+                              className="inline-flex items-center rounded border border-border bg-background px-1 py-0.5 text-[10px] font-semibold hover:bg-accent"
+                            >
+                              <Undo2 className="size-3" />
+                            </button>
+                          )}
                         </div>
+
                        {quantidadePendentePks > 0 && (
                          <div className="mt-1 flex items-center justify-end gap-1 whitespace-nowrap">
                            <span className="rounded bg-emb-cell px-1 py-0.5 text-[10px] font-bold text-emb-head-foreground">

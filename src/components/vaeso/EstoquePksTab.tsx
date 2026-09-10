@@ -87,63 +87,57 @@ export function EstoquePksTab({ dados }: { dados: Dados }) {
 
   const termo = busca.trim().toLowerCase();
 
-  const apontamentos = useMemo(
-    () =>
-      aceitas
-        .map((item) => {
-          const info = infoSku(item.sku);
-          return {
-            ...item,
-            numero: numeroOrdem.get(item.ordem_id) ?? item.ordem_id,
-            descricao: info.descricao,
-            tipo: info.tipo,
-            pallets: info.pcsPallet ? Number(item.quantidade) / info.pcsPallet : null,
-          };
-        })
-        .filter(
-          (item) =>
-            !termo ||
-            item.sku.toLowerCase().includes(termo) ||
-            item.descricao.toLowerCase().includes(termo) ||
-            item.tipo.toLowerCase().includes(termo) ||
-            item.numero.toLowerCase().includes(termo),
-        )
-        .sort((a, b) => (b.accepted_at ?? "").localeCompare(a.accepted_at ?? "")),
-    [aceitas, numeroOrdem, dados.skus, dados.produtos, termo],
-  );
-
   const saldos = useMemo(() => {
-    const mapa = new Map<string, { sku: string; produzido: number; baixado: number }>();
-    for (const item of aceitas) {
-      const chave = normalizar(item.sku);
-      const atual = mapa.get(chave) ?? { sku: item.sku, produzido: 0, baixado: 0 };
-      atual.produzido += Number(item.quantidade);
+    type Item = {
+      sku: string;
+      produzido: number;
+      baixado: number;
+      ocs: Set<string>;
+      ultima: string | null;
+    };
+    const mapa = new Map<string, Item>();
+    const obter = (codigo: string) => {
+      const chave = normalizar(codigo);
+      const atual =
+        mapa.get(chave) ??
+        { sku: codigo, produzido: 0, baixado: 0, ocs: new Set<string>(), ultima: null };
       mapa.set(chave, atual);
+      return atual;
+    };
+    for (const item of aceitas) {
+      const atual = obter(item.sku);
+      atual.produzido += Number(item.quantidade);
+      atual.ocs.add(numeroOrdem.get(item.ordem_id) ?? item.ordem_id);
+      if (!atual.ultima || (item.accepted_at ?? "") > atual.ultima) {
+        atual.ultima = item.accepted_at;
+      }
     }
     for (const item of baixas) {
-      const chave = normalizar(item.sku);
-      const atual = mapa.get(chave) ?? { sku: item.sku, produzido: 0, baixado: 0 };
-      atual.baixado += Number(item.quantidade);
-      mapa.set(chave, atual);
+      obter(item.sku).baixado += Number(item.quantidade);
     }
     return [...mapa.values()]
       .map((item) => {
         const info = infoSku(item.sku);
+        const saldo = item.produzido - item.baixado;
         return {
           ...item,
+          ocs: [...item.ocs].join(", "),
           descricao: info.descricao,
-          saldo: item.produzido - item.baixado,
-          pallets: info.pcsPallet ? (item.produzido - item.baixado) / info.pcsPallet : null,
+          tipo: info.tipo,
+          saldo,
+          pallets: info.pcsPallet ? saldo / info.pcsPallet : null,
         };
       })
       .filter(
         (item) =>
           !termo ||
           item.sku.toLowerCase().includes(termo) ||
-          item.descricao.toLowerCase().includes(termo),
+          item.descricao.toLowerCase().includes(termo) ||
+          item.tipo.toLowerCase().includes(termo) ||
+          item.ocs.toLowerCase().includes(termo),
       )
       .sort((a, b) => a.sku.localeCompare(b.sku));
-  }, [aceitas, baixas, dados.skus, dados.produtos, termo]);
+  }, [aceitas, baixas, numeroOrdem, dados.skus, dados.produtos, termo]);
 
   const totais = useMemo(
     () =>
@@ -158,6 +152,7 @@ export function EstoquePksTab({ dados }: { dados: Dados }) {
       ),
     [saldos],
   );
+
 
   async function importarNf(file: File) {
     setImportando(true);
@@ -226,7 +221,7 @@ export function EstoquePksTab({ dados }: { dados: Dados }) {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <SecaoTitulo>Estoque PKS · apontamentos aceitos</SecaoTitulo>
+        <SecaoTitulo>Estoque PKS</SecaoTitulo>
         <div className="flex flex-wrap items-center gap-2">
           <Input
             value={busca}
@@ -251,49 +246,15 @@ export function EstoquePksTab({ dados }: { dados: Dados }) {
         </div>
       </div>
 
-      <div className="max-h-[45vh] overflow-auto rounded-lg border border-border bg-card">
-        <table className="w-full min-w-[880px] text-xs">
+      <div className="max-h-[60vh] overflow-auto rounded-lg border border-border bg-card">
+        <table className="w-full min-w-[980px] text-xs">
           <thead className="sticky top-0 z-10 bg-grid-head text-grid-head-foreground">
             <tr>
               <th className="px-2 py-1.5 text-left uppercase">OC</th>
               <th className="px-2 py-1.5 text-left uppercase">Tipo</th>
               <th className="px-2 py-1.5 text-left uppercase">SKU</th>
               <th className="px-2 py-1.5 text-left uppercase">Descrição</th>
-              <th className="px-2 py-1.5 text-left uppercase">Data da produção</th>
-              <th className="px-2 py-1.5 text-right uppercase">Quantidade</th>
-              <th className="px-2 py-1.5 text-right uppercase">Pallets</th>
-            </tr>
-          </thead>
-          <tbody>
-            {apontamentos.map((item) => (
-              <tr key={item.id} className="border-t border-border even:bg-mp-cell">
-                <td className="px-2 py-1 font-semibold">{item.numero}</td>
-                <td className="px-2 py-1">{item.tipo}</td>
-                <td className="px-2 py-1 font-semibold">{item.sku}</td>
-                <td className="px-2 py-1">{item.descricao}</td>
-                <td className="px-2 py-1">{dataBr(item.accepted_at)}</td>
-                <td className="px-2 py-1 text-right font-bold">{fmtInt(item.quantidade)}</td>
-                <td className="px-2 py-1 text-right">{item.pallets === null ? "—" : fmt(item.pallets, 2)}</td>
-              </tr>
-            ))}
-            {apontamentos.length === 0 && (
-              <tr>
-                <td colSpan={7} className="px-3 py-8 text-center text-muted-foreground">
-                  Nenhum apontamento aceito na Programação até o momento.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      <SecaoTitulo>Saldo em estoque por SKU</SecaoTitulo>
-      <div className="max-h-[40vh] overflow-auto rounded-lg border border-border bg-card">
-        <table className="w-full min-w-[760px] text-xs">
-          <thead className="sticky top-0 z-10 bg-grid-head text-grid-head-foreground">
-            <tr>
-              <th className="px-2 py-1.5 text-left uppercase">SKU</th>
-              <th className="px-2 py-1.5 text-left uppercase">Descrição</th>
+              <th className="px-2 py-1.5 text-left uppercase">Última produção</th>
               <th className="px-2 py-1.5 text-right uppercase">Produzido</th>
               <th className="px-2 py-1.5 text-right uppercase">Baixado (NF)</th>
               <th className="px-2 py-1.5 text-right uppercase">Saldo</th>
@@ -303,8 +264,11 @@ export function EstoquePksTab({ dados }: { dados: Dados }) {
           <tbody>
             {saldos.map((item) => (
               <tr key={item.sku} className="border-t border-border even:bg-mp-cell">
+                <td className="px-2 py-1 font-semibold">{item.ocs || "—"}</td>
+                <td className="px-2 py-1">{item.tipo}</td>
                 <td className="px-2 py-1 font-semibold">{item.sku}</td>
                 <td className="px-2 py-1">{item.descricao}</td>
+                <td className="px-2 py-1">{dataBr(item.ultima)}</td>
                 <td className="px-2 py-1 text-right">{fmtInt(item.produzido)}</td>
                 <td className="px-2 py-1 text-right">{fmtInt(item.baixado)}</td>
                 <td className="px-2 py-1 text-right font-bold">{fmtInt(item.saldo)}</td>
@@ -313,17 +277,17 @@ export function EstoquePksTab({ dados }: { dados: Dados }) {
             ))}
             {saldos.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-3 py-6 text-center text-muted-foreground">
-                  Sem estoque registrado.
+                <td colSpan={9} className="px-3 py-8 text-center text-muted-foreground">
+                  Nenhum apontamento aceito na Programação até o momento.
                 </td>
               </tr>
             )}
           </tbody>
           {saldos.length > 0 && (
-            <tfoot className="bg-secondary font-bold">
+            <tfoot className="sticky bottom-0 bg-secondary font-bold">
               <tr className="border-t-2 border-border">
-                <td className="px-2 py-1.5 uppercase" colSpan={2}>
-                  Total
+                <td className="px-2 py-1.5 uppercase" colSpan={5}>
+                  Total ({saldos.length} SKUs)
                 </td>
                 <td className="px-2 py-1.5 text-right">{fmtInt(totais.produzido)}</td>
                 <td className="px-2 py-1.5 text-right">{fmtInt(totais.baixado)}</td>
@@ -334,6 +298,7 @@ export function EstoquePksTab({ dados }: { dados: Dados }) {
           )}
         </table>
       </div>
+
 
       <SecaoTitulo>Notas fiscais importadas</SecaoTitulo>
       <div className="overflow-auto rounded-lg border border-border bg-card">
