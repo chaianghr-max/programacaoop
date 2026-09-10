@@ -205,6 +205,37 @@ export function EstoquePksTab({ dados, podeEditar = true }: { dados: Dados; pode
     toast.success(`${fmtInt(quantidade)} unidades de ${sku} incluídas no estoque.`);
   }
 
+  /** Remove a linha do estoque: cancela os apontamentos e apaga as baixas do SKU. */
+  async function excluirLinha(sku: string) {
+    if (!window.confirm(`Excluir a linha ${sku} do estoque? Os apontamentos e as baixas deste SKU serão removidos.`)) {
+      return;
+    }
+    const alvos = aceitas.filter((item) => normalizar(item.sku) === normalizar(sku));
+    for (const item of alvos) {
+      const { error } = await supabase.rpc("pks_estornar_entrega", { _entrega_id: item.id });
+      if (error) {
+        toast.error(`Falha ao excluir a linha: ${error.message}`);
+        return;
+      }
+    }
+    const alvoBaixas = baixas
+      .filter((item) => normalizar(item.sku) === normalizar(sku))
+      .map((item) => item.id);
+    if (alvoBaixas.length > 0) {
+      const { error } = await supabase.from("pks_estoque_baixas").delete().in("id", alvoBaixas);
+      if (error) {
+        toast.error(`Falha ao excluir a linha: ${error.message}`);
+        return;
+      }
+    }
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: ["pks-estoque-baixas"] }),
+      qc.invalidateQueries({ queryKey: ["pks-entregas", "estoque"] }),
+      qc.invalidateQueries({ queryKey: ["pks-entregas"] }),
+    ]);
+    toast.success(`Linha ${sku} removida do estoque.`);
+  }
+
   function exportarExcel() {
     const cabecalho = [
       "OC",
