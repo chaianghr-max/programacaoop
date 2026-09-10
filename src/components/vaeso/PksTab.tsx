@@ -643,11 +643,20 @@ function FragmentoLinha({
   onLancar: () => void;
   onEstornar: () => void;
   onCalculo: () => void;
+  encerrada: boolean;
+  onEncerrar: () => void;
   componentes: ComponenteLinha[];
 }) {
+  const concluida = encerrada || saldo === 0;
   return (
     <>
-      <tr className={`border-t border-border even:bg-mp-cell ${saldo === 0 ? "text-muted-foreground" : ""}`}>
+      <tr
+        className={`border-t border-border ${
+          concluida
+            ? "bg-foreground/20 font-semibold text-foreground/70 line-through decoration-foreground/30"
+            : "even:bg-mp-cell"
+        }`}
+      >
         <td className="px-1 py-1 text-center">
           <Button variant="ghost" size="icon" className="size-6" onClick={onToggle} aria-label="Abrir estrutura">
             {aberta ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
