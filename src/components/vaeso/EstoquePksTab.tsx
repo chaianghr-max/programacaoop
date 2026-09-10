@@ -40,6 +40,8 @@ export function EstoquePksTab({ dados, podeEditar = true }: { dados: Dados; pode
   const [busca, setBusca] = useState("");
   const [importando, setImportando] = useState(false);
   const [ajustes, setAjustes] = useState<Record<string, string>>({});
+  const [novoSku, setNovoSku] = useState("");
+  const [novaQtde, setNovaQtde] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const qc = useQueryClient();
 
