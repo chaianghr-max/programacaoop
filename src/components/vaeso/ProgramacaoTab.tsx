@@ -110,6 +110,26 @@ export function ProgramacaoTab({
     },
   });
 
+  const { data: linhasEncerradas = [] } = useQuery({
+    queryKey: ["ordens-linhas-encerradas"],
+    refetchInterval: 10_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("ordens_linhas_encerradas")
+        .select("ordem_id,sku,encerrada");
+      if (error) throw error;
+      return data as Array<{ ordem_id: string; sku: string; encerrada: boolean }>;
+    },
+  });
+
+  const encerradaSet = useMemo(() => {
+    const conjunto = new Set<string>();
+    for (const item of linhasEncerradas) {
+      if (item.encerrada) conjunto.add(`${item.ordem_id}|${item.sku.trim().toUpperCase()}`);
+    }
+    return conjunto;
+  }, [linhasEncerradas]);
+
   // quantidade já entregue por ordem+sku
   const entregueMap = useMemo(() => {
     const m: Record<string, number> = {};
