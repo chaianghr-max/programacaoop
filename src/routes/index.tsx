@@ -52,27 +52,46 @@ type AbaId = (typeof ABAS)[number]["id"];
 function Painel() {
   const [pronto, setPronto] = useState(false);
   const [email, setEmail] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [papel, setPapel] = useState<"admin" | "pks" | "leitura">("leitura");
   const [aba, setAba] = useState<AbaId>("mp");
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       setEmail(data.session?.user.email ?? null);
+      setUserId(data.session?.user.id ?? null);
       setPronto(true);
     });
     const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
       setEmail(session?.user.email ?? null);
+      setUserId(session?.user.id ?? null);
     });
     return () => sub.subscription.unsubscribe();
   }, []);
 
+  useEffect(() => {
+    if (!userId) {
+      setPapel("leitura");
+      return;
+    }
+    void supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", userId)
+      .then(({ data }) => {
+        const papeis = (data ?? []).map((r) => r.role as string);
+        setPapel(papeis.includes("admin") ? "admin" : papeis.includes("pks") ? "pks" : "leitura");
+      });
+  }, [userId]);
+
   const logado = !!email;
   const { data: dados, isLoading, error } = useDados(logado);
   const salvarMut = useSalvar();
-  const ehDiretoria = !!email && email.startsWith("diretoria");
-  const podeEditarGeral = !!email && !email.startsWith("luana");
+  const ehDiretoria = papel === "admin";
+  const podeEditarGeral = papel === "admin";
   const salvar = (fn: () => PromiseLike<unknown>) => {
     if (!podeEditarGeral) {
-      toast.error("Seu acesso permite editar apenas as abas PKS e Estoque PKS.");
+      toast.error("Seu acesso não permite editar esta aba.");
       return;
     }
     salvarMut.mutate(fn);
@@ -81,11 +100,8 @@ function Painel() {
   if (!pronto) return <div className="min-h-screen bg-muted" />;
   if (!logado) return <LoginCard />;
 
-  const nome = email?.startsWith("diretoria")
-    ? "Diretoria"
-    : email?.startsWith("luana")
-      ? "Luana"
-      : "Gisele";
+  const nome = (email?.split("@")[0] ?? "").replace(/^./, (c) => c.toUpperCase());
+
 
   return (
     <div className="min-h-screen bg-muted">
