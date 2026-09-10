@@ -527,6 +527,29 @@ export function PksTab({ dados }: { dados: Dados }) {
           )}
         </DialogContent>
       </Dialog>
+
+      <Dialog open={!!confirmacao} onOpenChange={(aberto) => !aberto && setConfirmacao(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{confirmacao?.titulo}</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">{confirmacao?.mensagem}</p>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => setConfirmacao(null)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => {
+                const acao = confirmacao?.acao;
+                setConfirmacao(null);
+                acao?.();
+              }}
+            >
+              Prosseguir
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
