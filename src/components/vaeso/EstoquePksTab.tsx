@@ -87,63 +87,57 @@ export function EstoquePksTab({ dados }: { dados: Dados }) {
 
   const termo = busca.trim().toLowerCase();
 
-  const apontamentos = useMemo(
-    () =>
-      aceitas
-        .map((item) => {
-          const info = infoSku(item.sku);
-          return {
-            ...item,
-            numero: numeroOrdem.get(item.ordem_id) ?? item.ordem_id,
-            descricao: info.descricao,
-            tipo: info.tipo,
-            pallets: info.pcsPallet ? Number(item.quantidade) / info.pcsPallet : null,
-          };
-        })
-        .filter(
-          (item) =>
-            !termo ||
-            item.sku.toLowerCase().includes(termo) ||
-            item.descricao.toLowerCase().includes(termo) ||
-            item.tipo.toLowerCase().includes(termo) ||
-            item.numero.toLowerCase().includes(termo),
-        )
-        .sort((a, b) => (b.accepted_at ?? "").localeCompare(a.accepted_at ?? "")),
-    [aceitas, numeroOrdem, dados.skus, dados.produtos, termo],
-  );
-
   const saldos = useMemo(() => {
-    const mapa = new Map<string, { sku: string; produzido: number; baixado: number }>();
-    for (const item of aceitas) {
-      const chave = normalizar(item.sku);
-      const atual = mapa.get(chave) ?? { sku: item.sku, produzido: 0, baixado: 0 };
-      atual.produzido += Number(item.quantidade);
+    type Item = {
+      sku: string;
+      produzido: number;
+      baixado: number;
+      ocs: Set<string>;
+      ultima: string | null;
+    };
+    const mapa = new Map<string, Item>();
+    const obter = (codigo: string) => {
+      const chave = normalizar(codigo);
+      const atual =
+        mapa.get(chave) ??
+        { sku: codigo, produzido: 0, baixado: 0, ocs: new Set<string>(), ultima: null };
       mapa.set(chave, atual);
+      return atual;
+    };
+    for (const item of aceitas) {
+      const atual = obter(item.sku);
+      atual.produzido += Number(item.quantidade);
+      atual.ocs.add(numeroOrdem.get(item.ordem_id) ?? item.ordem_id);
+      if (!atual.ultima || (item.accepted_at ?? "") > atual.ultima) {
+        atual.ultima = item.accepted_at;
+      }
     }
     for (const item of baixas) {
-      const chave = normalizar(item.sku);
-      const atual = mapa.get(chave) ?? { sku: item.sku, produzido: 0, baixado: 0 };
-      atual.baixado += Number(item.quantidade);
-      mapa.set(chave, atual);
+      obter(item.sku).baixado += Number(item.quantidade);
     }
     return [...mapa.values()]
       .map((item) => {
         const info = infoSku(item.sku);
+        const saldo = item.produzido - item.baixado;
         return {
           ...item,
+          ocs: [...item.ocs].join(", "),
           descricao: info.descricao,
-          saldo: item.produzido - item.baixado,
-          pallets: info.pcsPallet ? (item.produzido - item.baixado) / info.pcsPallet : null,
+          tipo: info.tipo,
+          saldo,
+          pallets: info.pcsPallet ? saldo / info.pcsPallet : null,
         };
       })
       .filter(
         (item) =>
           !termo ||
           item.sku.toLowerCase().includes(termo) ||
-          item.descricao.toLowerCase().includes(termo),
+          item.descricao.toLowerCase().includes(termo) ||
+          item.tipo.toLowerCase().includes(termo) ||
+          item.ocs.toLowerCase().includes(termo),
       )
       .sort((a, b) => a.sku.localeCompare(b.sku));
-  }, [aceitas, baixas, dados.skus, dados.produtos, termo]);
+  }, [aceitas, baixas, numeroOrdem, dados.skus, dados.produtos, termo]);
 
   const totais = useMemo(
     () =>
@@ -158,6 +152,7 @@ export function EstoquePksTab({ dados }: { dados: Dados }) {
       ),
     [saldos],
   );
+
 
   async function importarNf(file: File) {
     setImportando(true);
