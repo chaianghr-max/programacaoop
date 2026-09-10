@@ -390,6 +390,7 @@ export type Database = {
         Returns: boolean
       }
       pks_aceitar_entrega: { Args: { _entrega_id: string }; Returns: number }
+      pode_pks: { Args: { _user_id: string }; Returns: boolean }
     }
     Enums: {
       app_role: "admin" | "pks"
