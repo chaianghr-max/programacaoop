@@ -6,3 +6,4 @@
 - [x] Sinalizar entregas PKS pendentes na Programação.
 - [x] Aceitar pendências e somá-las às entregas oficiais.
 - [x] Atualizar as duas abas automaticamente e validar a compilação.
+- [ ] Estoque PKS: somar apontamentos da PKS sem depender do aceite da Programacao; refletir estornos
