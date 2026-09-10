@@ -756,6 +756,7 @@ function FragmentoLinha({
           </td>
           <td className="bg-secondary/40 px-2 py-1 text-right font-bold">{fmtInt(componente.saldo)}</td>
           <td />
+          <td />
         </tr>
       ))}
     </>
