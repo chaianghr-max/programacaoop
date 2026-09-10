@@ -1,13 +1,20 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, ChevronRight, Plus } from "lucide-react";
+import { Calculator, ChevronDown, ChevronRight, Plus, Undo2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import type { Dados } from "@/lib/vaeso/api";
-import { calcularLinhaSku, fmt, fmtInt, num } from "@/lib/vaeso/calc";
+import { brl, calcularLinhaSku, fmt, fmtInt, num } from "@/lib/vaeso/calc";
+import type { LinhaSku } from "@/lib/vaeso/calc";
 
 const PKS = "PKS MANUFATURADOS LTDA";
 
@@ -20,10 +27,12 @@ type PksEntrega = {
 };
 
 type PksComponenteEntrega = {
+  id: string;
   ordem_id: string;
   sku: string;
   componente_id: string;
   quantidade: number;
+  status: string;
 };
 
 type LinhaPks = {
@@ -42,8 +51,9 @@ export function PksTab({ dados }: { dados: Dados }) {
   const [busca, setBusca] = useState("");
   const [selecionadas, setSelecionadas] = useState<string[]>([]);
   const [abertas, setAbertas] = useState<string[]>([]);
-  const [entradas, setEntradas] = useState<Record<string, string>>( {} );
+  const [entradas, setEntradas] = useState<Record<string, string>>({});
   const [salvando, setSalvando] = useState<string | null>(null);
+  const [detalhe, setDetalhe] = useState<LinhaSku | null>(null);
   const qc = useQueryClient();
 
   const { data: entregas = [] } = useQuery({
@@ -65,7 +75,7 @@ export function PksTab({ dados }: { dados: Dados }) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("pks_componentes_entregas")
-        .select("ordem_id,sku,componente_id,quantidade")
+        .select("id,ordem_id,sku,componente_id,quantidade,status")
         .order("created_at");
       if (error) throw error;
       return data as PksComponenteEntrega[];
@@ -126,13 +136,32 @@ export function PksTab({ dados }: { dados: Dados }) {
     return resultado;
   }, [ordens, idsAtivos, dados.skus, dados.produtos, dados.componentes, dados.mpItens, termo]);
 
+  const ativas = useMemo(
+    () => entregas.filter((item) => item.status !== "cancelado"),
+    [entregas],
+  );
+  const componentesAtivos = useMemo(
+    () => entregasComponentes.filter((item) => item.status !== "cancelado"),
+    [entregasComponentes],
+  );
+
   const totalPrincipal = (ordemId: string, sku: string) =>
-    entregas
+    ativas
       .filter((item) => item.ordem_id === ordemId && normalizar(item.sku) === normalizar(sku))
       .reduce((soma, item) => soma + Number(item.quantidade), 0);
 
+  const pendentePrincipal = (ordemId: string, sku: string) =>
+    ativas
+      .filter(
+        (item) =>
+          item.status === "pendente" &&
+          item.ordem_id === ordemId &&
+          normalizar(item.sku) === normalizar(sku),
+      )
+      .reduce((soma, item) => soma + Number(item.quantidade), 0);
+
   const totalComponente = (ordemId: string, sku: string, componenteId: string) =>
-    entregasComponentes
+    componentesAtivos
       .filter(
         (item) =>
           item.ordem_id === ordemId &&
@@ -140,6 +169,23 @@ export function PksTab({ dados }: { dados: Dados }) {
           item.componente_id === componenteId,
       )
       .reduce((soma, item) => soma + Number(item.quantidade), 0);
+
+  const totais = useMemo(() => {
+    let qtde = 0;
+    let entregue = 0;
+    let saldo = 0;
+    let kg = 0;
+    let horas = 0;
+    for (const linha of linhas) {
+      const feito = Math.min(linha.quantidade, totalPrincipal(linha.ordemId, linha.skuCodigo));
+      qtde += linha.quantidade;
+      entregue += feito;
+      saldo += Math.max(0, linha.quantidade - feito);
+      kg += Object.values(linha.calculo.kgPorMp).reduce((soma, valor) => soma + valor, 0);
+      horas += linha.calculo.horas ?? 0;
+    }
+    return { qtde, entregue, saldo, kg, horas };
+  }, [linhas, ativas]);
 
   async function lancarPrincipal(linha: LinhaPks) {
     const campo = `principal|${linha.key}`;
@@ -184,6 +230,100 @@ export function PksTab({ dados }: { dados: Dados }) {
     await qc.invalidateQueries({ queryKey: ["pks-componentes-entregas"] });
   }
 
+  /** Cancela os lançamentos ainda pendentes (não aceitos na Programação). */
+  async function estornarPrincipal(linha: LinhaPks) {
+    const alvos = ativas.filter(
+      (item) =>
+        item.status === "pendente" &&
+        item.ordem_id === linha.ordemId &&
+        normalizar(item.sku) === normalizar(linha.skuCodigo),
+    );
+    if (alvos.length === 0) {
+      toast.info("Não há quantidade pendente para estornar nesta linha.");
+      return;
+    }
+    const { error } = await supabase
+      .from("pks_entregas")
+      .update({ status: "cancelado" })
+      .in("id", alvos.map((item) => item.id));
+    if (error) {
+      toast.error(`Falha ao estornar: ${error.message}`);
+      return;
+    }
+    await qc.invalidateQueries({ queryKey: ["pks-entregas"] });
+    toast.success("Quantidade pendente estornada.");
+  }
+
+  async function estornarComponente(linha: LinhaPks, componenteId: string) {
+    const alvos = componentesAtivos.filter(
+      (item) =>
+        item.ordem_id === linha.ordemId &&
+        normalizar(item.sku) === normalizar(linha.skuCodigo) &&
+        item.componente_id === componenteId,
+    );
+    if (alvos.length === 0) return;
+    const ultimo = alvos[alvos.length - 1];
+    if (!ultimo) return;
+    const { error } = await supabase
+      .from("pks_componentes_entregas")
+      .update({ status: "cancelado" })
+      .eq("id", ultimo.id);
+    if (error) {
+      toast.error(`Falha ao estornar item: ${error.message}`);
+      return;
+    }
+    await qc.invalidateQueries({ queryKey: ["pks-componentes-entregas"] });
+  }
+
+  async function marcarTodas() {
+    const registros = linhas
+      .map((linha) => ({
+        ordem_id: linha.ordemId,
+        sku: linha.skuCodigo,
+        quantidade: Math.max(
+          0,
+          linha.quantidade - totalPrincipal(linha.ordemId, linha.skuCodigo),
+        ),
+      }))
+      .filter((registro) => registro.quantidade > 0);
+    if (registros.length === 0) {
+      toast.info("Todas as linhas já estão com entrega completa.");
+      return;
+    }
+    setSalvando("todas");
+    const { error } = await supabase.from("pks_entregas").insert(registros);
+    setSalvando(null);
+    if (error) {
+      toast.error(`Falha ao marcar todas: ${error.message}`);
+      return;
+    }
+    await qc.invalidateQueries({ queryKey: ["pks-entregas"] });
+    toast.success(`${registros.length} linhas marcadas como entregues.`);
+  }
+
+  async function desmarcarTodas() {
+    const chaves = new Set(linhas.map((linha) => `${linha.ordemId}|${normalizar(linha.skuCodigo)}`));
+    const alvos = ativas.filter(
+      (item) => item.status === "pendente" && chaves.has(`${item.ordem_id}|${normalizar(item.sku)}`),
+    );
+    if (alvos.length === 0) {
+      toast.info("Não há lançamentos pendentes para desmarcar.");
+      return;
+    }
+    setSalvando("todas");
+    const { error } = await supabase
+      .from("pks_entregas")
+      .update({ status: "cancelado" })
+      .in("id", alvos.map((item) => item.id));
+    setSalvando(null);
+    if (error) {
+      toast.error(`Falha ao desmarcar: ${error.message}`);
+      return;
+    }
+    await qc.invalidateQueries({ queryKey: ["pks-entregas"] });
+    toast.success("Lançamentos pendentes desmarcados.");
+  }
+
   const alternarOrdem = (id: string) =>
     setSelecionadas((atual) =>
       atual.includes(id) ? atual.filter((item) => item !== id) : [...atual, id],
@@ -193,13 +333,26 @@ export function PksTab({ dados }: { dados: Dados }) {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <SecaoTitulo>Ordens de compra · PKS Manufaturados</SecaoTitulo>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setSelecionadas(selecionadas.length === ordens.length ? [] : ordens.map((o) => o.id))}
-        >
-          {selecionadas.length === ordens.length && ordens.length > 0 ? "Limpar seleção" : "Selecionar todas"}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setSelecionadas(selecionadas.length === ordens.length ? [] : ordens.map((o) => o.id))}
+          >
+            {selecionadas.length === ordens.length && ordens.length > 0 ? "Limpar seleção" : "Selecionar todas"}
+          </Button>
+          <Button size="sm" disabled={salvando === "todas"} onClick={() => void marcarTodas()}>
+            Marcar todas como entregues
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={salvando === "todas"}
+            onClick={() => void desmarcarTodas()}
+          >
+            Desmarcar todas
+          </Button>
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -240,7 +393,7 @@ export function PksTab({ dados }: { dados: Dados }) {
       />
 
       <div className="max-h-[72vh] overflow-auto rounded-lg border border-border bg-card">
-        <table className="w-full min-w-[1050px] text-xs">
+        <table className="w-full min-w-[1120px] text-xs">
           <thead className="sticky top-0 z-10 bg-grid-head text-grid-head-foreground shadow-[0_1px_0_var(--color-border)]">
             <tr>
               <th className="w-8 px-1 py-1.5" />
@@ -253,6 +406,7 @@ export function PksTab({ dados }: { dados: Dados }) {
               <th className="bg-secondary px-2 py-1.5 text-right font-bold uppercase">Qtde OC</th>
               <th className="bg-secondary px-2 py-1.5 text-center font-bold uppercase">Entrega</th>
               <th className="bg-secondary px-2 py-1.5 text-right font-bold uppercase">Saldo</th>
+              <th className="px-2 py-1.5 text-center uppercase">Cálculo</th>
             </tr>
           </thead>
           <tbody>
@@ -268,6 +422,7 @@ export function PksTab({ dados }: { dados: Dados }) {
                   linha={linha}
                   aberta={aberta}
                   produzido={produzido}
+                  pendente={pendentePrincipal(linha.ordemId, linha.skuCodigo)}
                   saldo={saldo}
                   consumo={consumo}
                   campo={campo}
@@ -280,6 +435,8 @@ export function PksTab({ dados }: { dados: Dados }) {
                   }
                   onEntrada={(valor) => setEntradas((atual) => ({ ...atual, [campo]: valor }))}
                   onLancar={() => void lancarPrincipal(linha)}
+                  onEstornar={() => void estornarPrincipal(linha)}
+                  onCalculo={() => setDetalhe(linha.calculo)}
                   componentes={linha.calculo.componentes.map((componente) => {
                     const campoComponente = `componente|${linha.key}|${componente.comp.id}`;
                     const feito = totalComponente(linha.ordemId, linha.skuCodigo, componente.comp.id);
@@ -296,6 +453,7 @@ export function PksTab({ dados }: { dados: Dados }) {
                       onEntrada: (valor: string) =>
                         setEntradas((atual) => ({ ...atual, [campoComponente]: valor })),
                       onLancar: () => void lancarComponente(linha, componente.comp.id),
+                      onEstornar: () => void estornarComponente(linha, componente.comp.id),
                     };
                   })}
                 />
@@ -303,14 +461,96 @@ export function PksTab({ dados }: { dados: Dados }) {
             })}
             {linhas.length === 0 && (
               <tr>
-                <td colSpan={10} className="px-3 py-8 text-center text-muted-foreground">
+                <td colSpan={11} className="px-3 py-8 text-center text-muted-foreground">
                   Nenhum item encontrado.
                 </td>
               </tr>
             )}
           </tbody>
+          {linhas.length > 0 && (
+            <tfoot className="sticky bottom-0 bg-secondary font-bold">
+              <tr className="border-t-2 border-border">
+                <td className="px-1 py-1.5" />
+                <td className="px-2 py-1.5 uppercase" colSpan={4}>
+                  Total ({linhas.length} itens)
+                </td>
+                <td className="px-2 py-1.5 text-right">{fmt(totais.kg)} kg</td>
+                <td className="px-2 py-1.5 text-right">{fmt(totais.horas, 1)} h</td>
+                <td className="px-2 py-1.5 text-right">{fmtInt(totais.qtde)}</td>
+                <td className="px-2 py-1.5 text-right">{fmtInt(totais.entregue)}</td>
+                <td className="px-2 py-1.5 text-right">{fmtInt(totais.saldo)}</td>
+                <td />
+              </tr>
+            </tfoot>
+          )}
         </table>
       </div>
+
+      <Dialog open={!!detalhe} onOpenChange={(aberto) => !aberto && setDetalhe(null)}>
+        <DialogContent className="max-w-4xl overflow-hidden p-0">
+          <DialogHeader className="px-6 pt-6">
+            <DialogTitle>
+              Cálculo — {detalhe?.sku.sku} ({detalhe?.produto?.nome ?? "sem produto vinculado"})
+            </DialogTitle>
+          </DialogHeader>
+          {detalhe && (
+            <div className="max-h-[70vh] space-y-3 overflow-auto px-6 pb-6 text-sm">
+              <div className="text-muted-foreground">
+                Quantidade da OC: <strong>{fmtInt(detalhe.quantidade)}</strong> · % Pallet:{" "}
+                <strong>{fmt(detalhe.pallet, 1)}%</strong>
+              </div>
+              <div className="overflow-auto rounded-md border border-border">
+                <table className="min-w-max whitespace-nowrap text-xs">
+                  <thead className="bg-muted text-xs text-muted-foreground">
+                    <tr>
+                      <th className="px-2 py-1 text-left">Componente</th>
+                      <th className="px-2 py-1 text-left">MP</th>
+                      <th className="px-2 py-1 text-right">Peso (g)</th>
+                      <th className="px-2 py-1 text-right">Consumo (kg)</th>
+                      <th className="px-2 py-1 text-right">R$/kg</th>
+                      <th className="px-2 py-1 text-right">Custo</th>
+                      <th className="px-2 py-1 text-right">Cavidades</th>
+                      <th className="px-2 py-1 text-right">Ciclo (s)</th>
+                      <th className="px-2 py-1 text-right">Peças/h</th>
+                      <th className="px-2 py-1 text-right">Horas</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {detalhe.componentes.map((c) => (
+                      <tr key={c.comp.id} className="border-t border-border odd:bg-muted/30">
+                        <td className="px-2 py-1">{c.comp.descricao}</td>
+                        <td className="px-2 py-1">{c.comp.mp}</td>
+                        <td className="px-2 py-1 text-right">{fmt(c.comp.peso_g)}</td>
+                        <td className="px-2 py-1 text-right">{fmt(c.kg)}</td>
+                        <td className="px-2 py-1 text-right">{fmt(c.valorKg)}</td>
+                        <td className="px-2 py-1 text-right">{brl(c.custo)}</td>
+                        <td className="px-2 py-1 text-right">
+                          {c.comp.cavidades ? fmt(c.comp.cavidades, 0) : "—"}
+                        </td>
+                        <td className="px-2 py-1 text-right">
+                          {c.comp.ciclo_s ? fmt(c.comp.ciclo_s, 1) : "—"}
+                        </td>
+                        <td className="px-2 py-1 text-right">{fmt(c.ph, 0)}</td>
+                        <td className="px-2 py-1 text-right">{fmt(c.horas, 1)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t border-border font-semibold">
+                      <td className="px-2 py-1" colSpan={5}>
+                        Total
+                      </td>
+                      <td className="px-2 py-1 text-right">{brl(detalhe.custo)}</td>
+                      <td colSpan={3} />
+                      <td className="px-2 py-1 text-right">{fmt(detalhe.horas, 1)}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -327,12 +567,14 @@ type ComponenteLinha = {
   entrada: string;
   onEntrada: (valor: string) => void;
   onLancar: () => void;
+  onEstornar: () => void;
 };
 
 function FragmentoLinha({
   linha,
   aberta,
   produzido,
+  pendente,
   saldo,
   consumo,
   campo,
@@ -341,11 +583,14 @@ function FragmentoLinha({
   onToggle,
   onEntrada,
   onLancar,
+  onEstornar,
+  onCalculo,
   componentes,
 }: {
   linha: LinhaPks;
   aberta: boolean;
   produzido: number;
+  pendente: number;
   saldo: number;
   consumo: number;
   campo: string;
@@ -354,6 +599,8 @@ function FragmentoLinha({
   onToggle: () => void;
   onEntrada: (valor: string) => void;
   onLancar: () => void;
+  onEstornar: () => void;
+  onCalculo: () => void;
   componentes: ComponenteLinha[];
 }) {
   return (
@@ -385,9 +632,24 @@ function FragmentoLinha({
             <Button size="icon" className="size-7" disabled={!saldo || salvando === campo} onClick={onLancar} title="Somar entrega">
               <Plus className="size-4" />
             </Button>
+            <Button
+              size="icon"
+              variant="outline"
+              className="size-7"
+              disabled={!pendente}
+              onClick={onEstornar}
+              title="Estornar quantidade enviada e ainda pendente"
+            >
+              <Undo2 className="size-3" />
+            </Button>
           </div>
         </td>
         <td className="bg-secondary/70 px-2 py-1 text-right text-sm font-bold">{fmtInt(saldo)}</td>
+        <td className="px-2 py-1 text-center">
+          <Button variant="ghost" size="icon" className="size-7" onClick={onCalculo} title="Ver cálculo">
+            <Calculator className="size-4" />
+          </Button>
+        </td>
       </tr>
       {aberta && componentes.map((componente) => (
         <tr key={componente.id} className="border-t border-border bg-muted/40 text-[11px]">
@@ -413,9 +675,20 @@ function FragmentoLinha({
               <Button size="icon" variant="outline" className="size-7" disabled={!componente.saldo || salvando === componente.campo} onClick={componente.onLancar} title="Somar produção do item">
                 <Plus className="size-3" />
               </Button>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="size-7"
+                disabled={!componente.feito}
+                onClick={componente.onEstornar}
+                title="Estornar último lançamento do item"
+              >
+                <Undo2 className="size-3" />
+              </Button>
             </div>
           </td>
           <td className="bg-secondary/40 px-2 py-1 text-right font-bold">{fmtInt(componente.saldo)}</td>
+          <td />
         </tr>
       ))}
     </>
