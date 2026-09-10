@@ -169,6 +169,7 @@ export type Database = {
           ordem_id: string
           quantidade: number
           sku: string
+          status: string
         }
         Insert: {
           componente_id: string
@@ -178,6 +179,7 @@ export type Database = {
           ordem_id: string
           quantidade: number
           sku: string
+          status?: string
         }
         Update: {
           componente_id?: string
@@ -187,6 +189,7 @@ export type Database = {
           ordem_id?: string
           quantidade?: number
           sku?: string
+          status?: string
         }
         Relationships: [
           {
@@ -228,6 +231,36 @@ export type Database = {
           quantidade?: number
           sku?: string
           status?: string
+        }
+        Relationships: []
+      }
+      pks_estoque_baixas: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          nf_data: string | null
+          nf_numero: string
+          quantidade: number
+          sku: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          nf_data?: string | null
+          nf_numero: string
+          quantidade: number
+          sku: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          nf_data?: string | null
+          nf_numero?: string
+          quantidade?: number
+          sku?: string
         }
         Relationships: []
       }
