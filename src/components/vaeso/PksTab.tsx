@@ -187,10 +187,19 @@ export function PksTab({ dados }: { dados: Dados }) {
     return { qtde, entregue, saldo, kg, horas };
   }, [linhas, ativas]);
 
-  async function lancarPrincipal(linha: LinhaPks) {
+  async function lancarPrincipal(linha: LinhaPks, confirmado = false) {
     const campo = `principal|${linha.key}`;
     const quantidade = Math.max(0, num(entradas[campo]) ?? 0);
     if (!quantidade) return;
+    const saldo = Math.max(0, linha.quantidade - totalPrincipal(linha.ordemId, linha.skuCodigo));
+    if (!confirmado && quantidade > saldo) {
+      setConfirmacao({
+        titulo: `Apontar acima do saldo — ${linha.calculo.sku.sku}`,
+        mensagem: `Saldo desta linha: ${fmtInt(saldo)}. Você está apontando ${fmtInt(quantidade)}, ${fmtInt(quantidade - saldo)} a mais que o pedido. Deseja prosseguir?`,
+        acao: () => void lancarPrincipal(linha, true),
+      });
+      return;
+    }
     setSalvando(campo);
     const { error } = await supabase.from("pks_entregas").insert({
       ordem_id: linha.ordemId,
@@ -207,10 +216,22 @@ export function PksTab({ dados }: { dados: Dados }) {
     toast.success(`${fmtInt(quantidade)} unidades enviadas para confirmação.`);
   }
 
-  async function lancarComponente(linha: LinhaPks, componenteId: string) {
+  async function lancarComponente(linha: LinhaPks, componenteId: string, confirmado = false) {
     const campo = `componente|${linha.key}|${componenteId}`;
     const quantidade = Math.max(0, num(entradas[campo]) ?? 0);
     if (!quantidade) return;
+    const saldo = Math.max(
+      0,
+      linha.quantidade - totalComponente(linha.ordemId, linha.skuCodigo, componenteId),
+    );
+    if (!confirmado && quantidade > saldo) {
+      setConfirmacao({
+        titulo: "Apontar item acima do saldo",
+        mensagem: `Saldo deste item: ${fmtInt(saldo)}. Você está apontando ${fmtInt(quantidade)}, ${fmtInt(quantidade - saldo)} a mais. Deseja prosseguir?`,
+        acao: () => void lancarComponente(linha, componenteId, true),
+      });
+      return;
+    }
 
     setSalvando(campo);
     const { error } = await supabase.from("pks_componentes_entregas").insert({
@@ -227,6 +248,7 @@ export function PksTab({ dados }: { dados: Dados }) {
     setEntradas((atual) => ({ ...atual, [campo]: "" }));
     await qc.invalidateQueries({ queryKey: ["pks-componentes-entregas"] });
   }
+
 
   /** Estorna todos os lançamentos da linha (pendentes e já aceitos na Programação). */
   async function estornarPrincipal(linha: LinhaPks) {
