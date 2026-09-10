@@ -390,6 +390,11 @@ export type Database = {
         Returns: boolean
       }
       pks_aceitar_entrega: { Args: { _entrega_id: string }; Returns: number }
+      pks_devolver_linha: {
+        Args: { _ordem_id: string; _sku: string }
+        Returns: number
+      }
+      pks_estornar_entrega: { Args: { _entrega_id: string }; Returns: number }
       pode_pks: { Args: { _user_id: string }; Returns: boolean }
     }
     Enums: {
