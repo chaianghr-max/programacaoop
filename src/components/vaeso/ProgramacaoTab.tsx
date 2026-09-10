@@ -889,7 +889,17 @@ export function ProgramacaoTab({
                           >
                             <Check className="size-3" />
                           </button>
+                          {entregueQtde > 0 && (
+                            <button
+                              title="Devolver esta quantidade para a PKS"
+                              onClick={() => void devolverParaPks(l.sku.sku)}
+                              className="inline-flex items-center rounded border border-border bg-background px-1 py-0.5 text-[10px] font-semibold hover:bg-accent"
+                            >
+                              <Undo2 className="size-3" />
+                            </button>
+                          )}
                         </div>
+
                        {quantidadePendentePks > 0 && (
                          <div className="mt-1 flex items-center justify-end gap-1 whitespace-nowrap">
                            <span className="rounded bg-emb-cell px-1 py-0.5 text-[10px] font-bold text-emb-head-foreground">
