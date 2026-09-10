@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, FileUp, Sheet, Trash2 } from "lucide-react";
+import { Check, FileUp, Plus, Sheet, Trash2 } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
