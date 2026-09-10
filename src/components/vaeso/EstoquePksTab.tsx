@@ -445,6 +445,19 @@ export function EstoquePksTab({ dados, podeEditar = true }: { dados: Dados; pode
                   </td>
                 )}
                 <td className="px-2 py-1 text-right">{item.pallets === null ? "—" : fmt(item.pallets, 2)}</td>
+                {podeEditar && (
+                  <td className="px-2 py-1 text-right">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-7"
+                      title="Excluir esta linha do estoque"
+                      onClick={() => void excluirLinha(item.sku)}
+                    >
+                      <Trash2 className="size-4" />
+                    </Button>
+                  </td>
+                )}
               </tr>
             ))}
             {saldos.length === 0 && (
