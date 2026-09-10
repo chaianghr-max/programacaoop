@@ -298,7 +298,10 @@ export function EstoquePksTab({ dados, podeEditar = true }: { dados: Dados; pode
               if (file) void importarNf(file);
             }}
           />
-          <Button size="sm" disabled={importando} onClick={() => inputRef.current?.click()}>
+          <Button size="sm" variant="outline" disabled={saldos.length === 0} onClick={exportarExcel}>
+            <Sheet className="mr-1 size-4" /> Salvar em Excel
+          </Button>
+          <Button size="sm" disabled={importando || !podeEditar} onClick={() => inputRef.current?.click()}>
             <FileUp className="mr-1 size-4" />
             {importando ? "Lendo NF..." : "Importar NF (PDF)"}
           </Button>
@@ -306,7 +309,7 @@ export function EstoquePksTab({ dados, podeEditar = true }: { dados: Dados; pode
       </div>
 
       <div className="max-h-[60vh] overflow-auto rounded-lg border border-border bg-card">
-        <table className="w-full min-w-[980px] text-xs">
+        <table className="w-full min-w-[1080px] text-xs">
           <thead className="sticky top-0 z-10 bg-grid-head text-grid-head-foreground">
             <tr>
               <th className="px-2 py-1.5 text-left uppercase">OC</th>
@@ -317,6 +320,7 @@ export function EstoquePksTab({ dados, podeEditar = true }: { dados: Dados; pode
               <th className="px-2 py-1.5 text-right uppercase">Produzido</th>
               <th className="px-2 py-1.5 text-right uppercase">Baixado (NF)</th>
               <th className="px-2 py-1.5 text-right uppercase">Saldo</th>
+              {podeEditar && <th className="px-2 py-1.5 text-center uppercase">Ajustar saldo</th>}
               <th className="px-2 py-1.5 text-right uppercase">Pallets</th>
             </tr>
           </thead>
@@ -331,17 +335,42 @@ export function EstoquePksTab({ dados, podeEditar = true }: { dados: Dados; pode
                 <td className="px-2 py-1 text-right">{fmtInt(item.produzido)}</td>
                 <td className="px-2 py-1 text-right">{fmtInt(item.baixado)}</td>
                 <td className="px-2 py-1 text-right font-bold">{fmtInt(item.saldo)}</td>
+                {podeEditar && (
+                  <td className="px-2 py-1">
+                    <div className="flex items-center justify-end gap-1">
+                      <Input
+                        type="number"
+                        value={ajustes[item.sku] ?? ""}
+                        placeholder={fmtInt(item.saldo)}
+                        onChange={(evento) =>
+                          setAjustes((atual) => ({ ...atual, [item.sku]: evento.target.value }))
+                        }
+                        className="h-7 w-24 text-right"
+                      />
+                      <Button
+                        size="icon"
+                        className="size-7"
+                        title="Gravar novo saldo"
+                        disabled={!ajustes[item.sku]}
+                        onClick={() => void ajustarSaldo(item.sku, item.saldo)}
+                      >
+                        <Check className="size-4" />
+                      </Button>
+                    </div>
+                  </td>
+                )}
                 <td className="px-2 py-1 text-right">{item.pallets === null ? "—" : fmt(item.pallets, 2)}</td>
               </tr>
             ))}
             {saldos.length === 0 && (
               <tr>
-                <td colSpan={9} className="px-3 py-8 text-center text-muted-foreground">
-                  Nenhum apontamento aceito na Programação até o momento.
+                <td colSpan={podeEditar ? 10 : 9} className="px-3 py-8 text-center text-muted-foreground">
+                  Nenhum apontamento da PKS até o momento.
                 </td>
               </tr>
             )}
           </tbody>
+
           {saldos.length > 0 && (
             <tfoot className="sticky bottom-0 bg-secondary font-bold">
               <tr className="border-t-2 border-border">
