@@ -1,0 +1,391 @@
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { FileUp, Trash2 } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
+
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { supabase } from "@/integrations/supabase/client";
+import type { Dados } from "@/lib/vaeso/api";
+import { fmt, fmtInt, produtoDoSku } from "@/lib/vaeso/calc";
+import { parseNfLinhas } from "@/lib/vaeso/nf";
+import { extrairTextoPdf } from "@/lib/vaeso/pdf";
+
+type EntregaAceita = {
+  id: string;
+  ordem_id: string;
+  sku: string;
+  quantidade: number;
+  accepted_at: string | null;
+};
+
+type Baixa = {
+  id: string;
+  nf_numero: string;
+  nf_data: string | null;
+  sku: string;
+  quantidade: number;
+  created_at: string;
+};
+
+const normalizar = (valor: string) =>
+  valor.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toUpperCase();
+
+const dataBr = (iso: string | null) =>
+  iso ? new Date(iso).toLocaleDateString("pt-BR") : "—";
+
+export function EstoquePksTab({ dados }: { dados: Dados }) {
+  const [busca, setBusca] = useState("");
+  const [importando, setImportando] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const qc = useQueryClient();
+
+  const { data: aceitas = [] } = useQuery({
+    queryKey: ["pks-entregas-aceitas"],
+    refetchInterval: 15_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("pks_entregas")
+        .select("id,ordem_id,sku,quantidade,accepted_at")
+        .eq("status", "aceito")
+        .order("accepted_at");
+      if (error) throw error;
+      return data as EntregaAceita[];
+    },
+  });
+
+  const { data: baixas = [] } = useQuery({
+    queryKey: ["pks-estoque-baixas"],
+    refetchInterval: 15_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("pks_estoque_baixas")
+        .select("id,nf_numero,nf_data,sku,quantidade,created_at")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data as Baixa[];
+    },
+  });
+
+  const numeroOrdem = useMemo(() => {
+    const mapa = new Map<string, string>();
+    for (const pedido of dados.pedidos) {
+      mapa.set(`p${pedido.slot}`, pedido.numero ?? String(pedido.slot));
+    }
+    return mapa;
+  }, [dados.pedidos]);
+
+  const infoSku = (codigo: string) => {
+    const sku = dados.skus.find((item) => normalizar(item.sku) === normalizar(codigo));
+    const produto = sku ? produtoDoSku(sku, dados.produtos) : null;
+    return {
+      descricao: sku?.descricao ?? "—",
+      tipo: sku?.tipo ?? "—",
+      pcsPallet: produto?.pcs_pallet ?? null,
+    };
+  };
+
+  const termo = busca.trim().toLowerCase();
+
+  const apontamentos = useMemo(
+    () =>
+      aceitas
+        .map((item) => {
+          const info = infoSku(item.sku);
+          return {
+            ...item,
+            numero: numeroOrdem.get(item.ordem_id) ?? item.ordem_id,
+            descricao: info.descricao,
+            tipo: info.tipo,
+            pallets: info.pcsPallet ? Number(item.quantidade) / info.pcsPallet : null,
+          };
+        })
+        .filter(
+          (item) =>
+            !termo ||
+            item.sku.toLowerCase().includes(termo) ||
+            item.descricao.toLowerCase().includes(termo) ||
+            item.tipo.toLowerCase().includes(termo) ||
+            item.numero.toLowerCase().includes(termo),
+        )
+        .sort((a, b) => (b.accepted_at ?? "").localeCompare(a.accepted_at ?? "")),
+    [aceitas, numeroOrdem, dados.skus, dados.produtos, termo],
+  );
+
+  const saldos = useMemo(() => {
+    const mapa = new Map<string, { sku: string; produzido: number; baixado: number }>();
+    for (const item of aceitas) {
+      const chave = normalizar(item.sku);
+      const atual = mapa.get(chave) ?? { sku: item.sku, produzido: 0, baixado: 0 };
+      atual.produzido += Number(item.quantidade);
+      mapa.set(chave, atual);
+    }
+    for (const item of baixas) {
+      const chave = normalizar(item.sku);
+      const atual = mapa.get(chave) ?? { sku: item.sku, produzido: 0, baixado: 0 };
+      atual.baixado += Number(item.quantidade);
+      mapa.set(chave, atual);
+    }
+    return [...mapa.values()]
+      .map((item) => {
+        const info = infoSku(item.sku);
+        return {
+          ...item,
+          descricao: info.descricao,
+          saldo: item.produzido - item.baixado,
+          pallets: info.pcsPallet ? (item.produzido - item.baixado) / info.pcsPallet : null,
+        };
+      })
+      .filter(
+        (item) =>
+          !termo ||
+          item.sku.toLowerCase().includes(termo) ||
+          item.descricao.toLowerCase().includes(termo),
+      )
+      .sort((a, b) => a.sku.localeCompare(b.sku));
+  }, [aceitas, baixas, dados.skus, dados.produtos, termo]);
+
+  const totais = useMemo(
+    () =>
+      saldos.reduce(
+        (acumulado, item) => ({
+          produzido: acumulado.produzido + item.produzido,
+          baixado: acumulado.baixado + item.baixado,
+          saldo: acumulado.saldo + item.saldo,
+          pallets: acumulado.pallets + (item.pallets ?? 0),
+        }),
+        { produzido: 0, baixado: 0, saldo: 0, pallets: 0 },
+      ),
+    [saldos],
+  );
+
+  async function importarNf(file: File) {
+    setImportando(true);
+    try {
+      const linhas = await extrairTextoPdf(file);
+      const nf = parseNfLinhas(linhas);
+      if (!nf.numero) {
+        toast.error("Não foi possível identificar o número da NF no PDF.");
+        return;
+      }
+      if (nf.itens.length === 0) {
+        toast.error("Nenhum item reconhecido na NF.");
+        return;
+      }
+      const registros = nf.itens.map((item) => ({
+        nf_numero: nf.numero as string,
+        nf_data: nf.data,
+        sku: item.sku,
+        quantidade: item.quantidade,
+      }));
+      const { error } = await supabase.from("pks_estoque_baixas").insert(registros);
+      if (error) {
+        if (error.code === "23505") {
+          toast.error(`A NF ${nf.numero} já foi importada.`);
+          return;
+        }
+        toast.error(`Falha ao baixar estoque: ${error.message}`);
+        return;
+      }
+      await qc.invalidateQueries({ queryKey: ["pks-estoque-baixas"] });
+      toast.success(`NF ${nf.numero} importada · ${registros.length} itens baixados.`);
+    } catch (erro) {
+      toast.error(`Erro ao ler o PDF: ${(erro as Error).message}`);
+    } finally {
+      setImportando(false);
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  }
+
+  async function removerNf(numero: string) {
+    const { error } = await supabase.from("pks_estoque_baixas").delete().eq("nf_numero", numero);
+    if (error) {
+      toast.error(`Falha ao remover a NF: ${error.message}`);
+      return;
+    }
+    await qc.invalidateQueries({ queryKey: ["pks-estoque-baixas"] });
+    toast.success(`Baixas da NF ${numero} removidas.`);
+  }
+
+  const notas = useMemo(() => {
+    const mapa = new Map<string, { numero: string; data: string | null; itens: number; qtde: number }>();
+    for (const item of baixas) {
+      const atual = mapa.get(item.nf_numero) ?? {
+        numero: item.nf_numero,
+        data: item.nf_data,
+        itens: 0,
+        qtde: 0,
+      };
+      atual.itens += 1;
+      atual.qtde += Number(item.quantidade);
+      mapa.set(item.nf_numero, atual);
+    }
+    return [...mapa.values()];
+  }, [baixas]);
+
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <SecaoTitulo>Estoque PKS · apontamentos aceitos</SecaoTitulo>
+        <div className="flex flex-wrap items-center gap-2">
+          <Input
+            value={busca}
+            onChange={(evento) => setBusca(evento.target.value)}
+            placeholder="Buscar por SKU, descrição ou OC..."
+            className="h-8 max-w-xs"
+          />
+          <input
+            ref={inputRef}
+            type="file"
+            accept="application/pdf"
+            className="hidden"
+            onChange={(evento) => {
+              const file = evento.target.files?.[0];
+              if (file) void importarNf(file);
+            }}
+          />
+          <Button size="sm" disabled={importando} onClick={() => inputRef.current?.click()}>
+            <FileUp className="mr-1 size-4" />
+            {importando ? "Lendo NF..." : "Importar NF (PDF)"}
+          </Button>
+        </div>
+      </div>
+
+      <div className="max-h-[45vh] overflow-auto rounded-lg border border-border bg-card">
+        <table className="w-full min-w-[880px] text-xs">
+          <thead className="sticky top-0 z-10 bg-grid-head text-grid-head-foreground">
+            <tr>
+              <th className="px-2 py-1.5 text-left uppercase">OC</th>
+              <th className="px-2 py-1.5 text-left uppercase">Tipo</th>
+              <th className="px-2 py-1.5 text-left uppercase">SKU</th>
+              <th className="px-2 py-1.5 text-left uppercase">Descrição</th>
+              <th className="px-2 py-1.5 text-left uppercase">Data da produção</th>
+              <th className="px-2 py-1.5 text-right uppercase">Quantidade</th>
+              <th className="px-2 py-1.5 text-right uppercase">Pallets</th>
+            </tr>
+          </thead>
+          <tbody>
+            {apontamentos.map((item) => (
+              <tr key={item.id} className="border-t border-border even:bg-mp-cell">
+                <td className="px-2 py-1 font-semibold">{item.numero}</td>
+                <td className="px-2 py-1">{item.tipo}</td>
+                <td className="px-2 py-1 font-semibold">{item.sku}</td>
+                <td className="px-2 py-1">{item.descricao}</td>
+                <td className="px-2 py-1">{dataBr(item.accepted_at)}</td>
+                <td className="px-2 py-1 text-right font-bold">{fmtInt(item.quantidade)}</td>
+                <td className="px-2 py-1 text-right">{item.pallets === null ? "—" : fmt(item.pallets, 2)}</td>
+              </tr>
+            ))}
+            {apontamentos.length === 0 && (
+              <tr>
+                <td colSpan={7} className="px-3 py-8 text-center text-muted-foreground">
+                  Nenhum apontamento aceito na Programação até o momento.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <SecaoTitulo>Saldo em estoque por SKU</SecaoTitulo>
+      <div className="max-h-[40vh] overflow-auto rounded-lg border border-border bg-card">
+        <table className="w-full min-w-[760px] text-xs">
+          <thead className="sticky top-0 z-10 bg-grid-head text-grid-head-foreground">
+            <tr>
+              <th className="px-2 py-1.5 text-left uppercase">SKU</th>
+              <th className="px-2 py-1.5 text-left uppercase">Descrição</th>
+              <th className="px-2 py-1.5 text-right uppercase">Produzido</th>
+              <th className="px-2 py-1.5 text-right uppercase">Baixado (NF)</th>
+              <th className="px-2 py-1.5 text-right uppercase">Saldo</th>
+              <th className="px-2 py-1.5 text-right uppercase">Pallets</th>
+            </tr>
+          </thead>
+          <tbody>
+            {saldos.map((item) => (
+              <tr key={item.sku} className="border-t border-border even:bg-mp-cell">
+                <td className="px-2 py-1 font-semibold">{item.sku}</td>
+                <td className="px-2 py-1">{item.descricao}</td>
+                <td className="px-2 py-1 text-right">{fmtInt(item.produzido)}</td>
+                <td className="px-2 py-1 text-right">{fmtInt(item.baixado)}</td>
+                <td className="px-2 py-1 text-right font-bold">{fmtInt(item.saldo)}</td>
+                <td className="px-2 py-1 text-right">{item.pallets === null ? "—" : fmt(item.pallets, 2)}</td>
+              </tr>
+            ))}
+            {saldos.length === 0 && (
+              <tr>
+                <td colSpan={6} className="px-3 py-6 text-center text-muted-foreground">
+                  Sem estoque registrado.
+                </td>
+              </tr>
+            )}
+          </tbody>
+          {saldos.length > 0 && (
+            <tfoot className="bg-secondary font-bold">
+              <tr className="border-t-2 border-border">
+                <td className="px-2 py-1.5 uppercase" colSpan={2}>
+                  Total
+                </td>
+                <td className="px-2 py-1.5 text-right">{fmtInt(totais.produzido)}</td>
+                <td className="px-2 py-1.5 text-right">{fmtInt(totais.baixado)}</td>
+                <td className="px-2 py-1.5 text-right">{fmtInt(totais.saldo)}</td>
+                <td className="px-2 py-1.5 text-right">{fmt(totais.pallets, 2)}</td>
+              </tr>
+            </tfoot>
+          )}
+        </table>
+      </div>
+
+      <SecaoTitulo>Notas fiscais importadas</SecaoTitulo>
+      <div className="overflow-auto rounded-lg border border-border bg-card">
+        <table className="w-full min-w-[560px] text-xs">
+          <thead className="bg-grid-head text-grid-head-foreground">
+            <tr>
+              <th className="px-2 py-1.5 text-left uppercase">NF</th>
+              <th className="px-2 py-1.5 text-left uppercase">Emissão</th>
+              <th className="px-2 py-1.5 text-right uppercase">Itens</th>
+              <th className="px-2 py-1.5 text-right uppercase">Quantidade</th>
+              <th className="w-10 px-2 py-1.5" />
+            </tr>
+          </thead>
+          <tbody>
+            {notas.map((nota) => (
+              <tr key={nota.numero} className="border-t border-border even:bg-mp-cell">
+                <td className="px-2 py-1 font-semibold">{nota.numero}</td>
+                <td className="px-2 py-1">{nota.data ?? "—"}</td>
+                <td className="px-2 py-1 text-right">{nota.itens}</td>
+                <td className="px-2 py-1 text-right font-bold">{fmtInt(nota.qtde)}</td>
+                <td className="px-2 py-1 text-right">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-7"
+                    title="Remover baixas desta NF"
+                    onClick={() => void removerNf(nota.numero)}
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
+                </td>
+              </tr>
+            ))}
+            {notas.length === 0 && (
+              <tr>
+                <td colSpan={5} className="px-3 py-6 text-center text-muted-foreground">
+                  Nenhuma NF importada.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function SecaoTitulo({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide text-primary">
+      <span className="size-2 rounded-[2px] bg-primary" />
+      {children}
+    </div>
+  );
+}
