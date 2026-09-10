@@ -113,10 +113,10 @@ export function EstoquePksTab({ dados, podeEditar = true }: { dados: Dados; pode
       const atual = obter(item.sku);
       atual.produzido += Number(item.quantidade);
       atual.ocs.add(numeroOrdem.get(item.ordem_id) ?? item.ordem_id);
-      if (!atual.ultima || (item.accepted_at ?? "") > atual.ultima) {
-        atual.ultima = item.accepted_at;
-      }
+      const data = item.accepted_at ?? item.created_at;
+      if (!atual.ultima || data > atual.ultima) atual.ultima = data;
     }
+
     for (const item of baixas) {
       obter(item.sku).baixado += Number(item.quantidade);
     }
