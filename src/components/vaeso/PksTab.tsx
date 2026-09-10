@@ -625,6 +625,8 @@ function FragmentoLinha({
   onLancar,
   onEstornar,
   onCalculo,
+  encerrada,
+  onEncerrar,
   componentes,
 }: {
   linha: LinhaPks;
