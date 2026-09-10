@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { FileUp, Trash2 } from "lucide-react";
+import { Check, FileUp, Sheet, Trash2 } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -7,16 +7,18 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import type { Dados } from "@/lib/vaeso/api";
-import { fmt, fmtInt, produtoDoSku } from "@/lib/vaeso/calc";
+import { fmt, fmtInt, num, produtoDoSku } from "@/lib/vaeso/calc";
 import { parseNfLinhas } from "@/lib/vaeso/nf";
 import { extrairTextoPdf } from "@/lib/vaeso/pdf";
 
-type EntregaAceita = {
+type EntregaPks = {
   id: string;
   ordem_id: string;
   sku: string;
   quantidade: number;
+  status: string;
   accepted_at: string | null;
+  created_at: string;
 };
 
 type Baixa = {
@@ -34,25 +36,28 @@ const normalizar = (valor: string) =>
 const dataBr = (iso: string | null) =>
   iso ? new Date(iso).toLocaleDateString("pt-BR") : "—";
 
-export function EstoquePksTab({ dados }: { dados: Dados }) {
+export function EstoquePksTab({ dados, podeEditar = true }: { dados: Dados; podeEditar?: boolean }) {
   const [busca, setBusca] = useState("");
   const [importando, setImportando] = useState(false);
+  const [ajustes, setAjustes] = useState<Record<string, string>>({});
   const inputRef = useRef<HTMLInputElement>(null);
   const qc = useQueryClient();
 
+  // Apontamentos da PKS: entram no estoque mesmo antes do aceite na Programação.
   const { data: aceitas = [] } = useQuery({
-    queryKey: ["pks-entregas-aceitas"],
-    refetchInterval: 15_000,
+    queryKey: ["pks-entregas", "estoque"],
+    refetchInterval: 10_000,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("pks_entregas")
-        .select("id,ordem_id,sku,quantidade,accepted_at")
-        .eq("status", "aceito")
-        .order("accepted_at");
+        .select("id,ordem_id,sku,quantidade,status,accepted_at,created_at")
+        .neq("status", "cancelado")
+        .order("created_at");
       if (error) throw error;
-      return data as EntregaAceita[];
+      return data as EntregaPks[];
     },
   });
+
 
   const { data: baixas = [] } = useQuery({
     queryKey: ["pks-estoque-baixas"],
