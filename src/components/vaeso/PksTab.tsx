@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Calculator, ChevronDown, ChevronRight, Plus, Undo2 } from "lucide-react";
+import { Calculator, ChevronDown, ChevronRight, Lock, LockOpen, Plus, Undo2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -84,6 +84,26 @@ export function PksTab({ dados }: { dados: Dados }) {
       return data as PksComponenteEntrega[];
     },
   });
+
+  const { data: encerradas = [] } = useQuery({
+    queryKey: ["ordens-linhas-encerradas"],
+    refetchInterval: 10_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("ordens_linhas_encerradas")
+        .select("ordem_id,sku,encerrada");
+      if (error) throw error;
+      return data as Array<{ ordem_id: string; sku: string; encerrada: boolean }>;
+    },
+  });
+
+  const encerradaSet = useMemo(() => {
+    const conjunto = new Set<string>();
+    for (const item of encerradas) {
+      if (item.encerrada) conjunto.add(`${item.ordem_id}|${normalizar(item.sku)}`);
+    }
+    return conjunto;
+  }, [encerradas]);
 
   const ordens = useMemo(
     () =>
@@ -300,6 +320,23 @@ export function PksTab({ dados }: { dados: Dados }) {
   }
 
 
+  /** Encerra (ou reabre) a linha da ordem, mesmo com saldo em aberto. */
+  async function alternarEncerramento(linha: LinhaPks) {
+    const encerrada = encerradaSet.has(`${linha.ordemId}|${normalizar(linha.skuCodigo)}`);
+    const { error } = await supabase.from("ordens_linhas_encerradas").upsert({
+      ordem_id: linha.ordemId,
+      sku: linha.skuCodigo,
+      encerrada: !encerrada,
+      updated_at: new Date().toISOString(),
+    });
+    if (error) {
+      toast.error(`Falha ao encerrar a linha: ${error.message}`);
+      return;
+    }
+    await qc.invalidateQueries({ queryKey: ["ordens-linhas-encerradas"] });
+    toast.success(encerrada ? "Linha reaberta." : "Linha encerrada.");
+  }
+
   const alternarOrdem = (id: string) =>
     setSelecionadas((atual) =>
       atual.includes(id) ? atual.filter((item) => item !== id) : [...atual, id],
@@ -383,6 +420,7 @@ export function PksTab({ dados }: { dados: Dados }) {
               <th className="bg-secondary px-2 py-1.5 text-center font-bold uppercase">Entrega</th>
               <th className="bg-secondary px-2 py-1.5 text-right font-bold uppercase">Saldo</th>
               <th className="px-2 py-1.5 text-center uppercase">Cálculo</th>
+              <th className="px-2 py-1.5 text-center uppercase">Encerrar</th>
             </tr>
           </thead>
           <tbody>
@@ -413,6 +451,8 @@ export function PksTab({ dados }: { dados: Dados }) {
                   onLancar={() => void lancarPrincipal(linha)}
                   onEstornar={() => void estornarPrincipal(linha)}
                   onCalculo={() => setDetalhe(linha.calculo)}
+                  encerrada={encerradaSet.has(`${linha.ordemId}|${normalizar(linha.skuCodigo)}`)}
+                  onEncerrar={() => void alternarEncerramento(linha)}
                   componentes={linha.calculo.componentes.map((componente) => {
                     const campoComponente = `componente|${linha.key}|${componente.comp.id}`;
                     const feito = totalComponente(linha.ordemId, linha.skuCodigo, componente.comp.id);
@@ -437,7 +477,7 @@ export function PksTab({ dados }: { dados: Dados }) {
             })}
             {linhas.length === 0 && (
               <tr>
-                <td colSpan={11} className="px-3 py-8 text-center text-muted-foreground">
+                <td colSpan={12} className="px-3 py-8 text-center text-muted-foreground">
                   Nenhum item encontrado.
                 </td>
               </tr>
@@ -455,6 +495,7 @@ export function PksTab({ dados }: { dados: Dados }) {
                 <td className="px-2 py-1.5 text-right">{fmtInt(totais.qtde)}</td>
                 <td className="px-2 py-1.5 text-right">{fmtInt(totais.entregue)}</td>
                 <td className="px-2 py-1.5 text-right">{fmtInt(totais.saldo)}</td>
+                <td />
                 <td />
               </tr>
             </tfoot>
@@ -584,6 +625,8 @@ function FragmentoLinha({
   onLancar,
   onEstornar,
   onCalculo,
+  encerrada,
+  onEncerrar,
   componentes,
 }: {
   linha: LinhaPks;
@@ -600,11 +643,20 @@ function FragmentoLinha({
   onLancar: () => void;
   onEstornar: () => void;
   onCalculo: () => void;
+  encerrada: boolean;
+  onEncerrar: () => void;
   componentes: ComponenteLinha[];
 }) {
+  const concluida = encerrada || saldo === 0;
   return (
     <>
-      <tr className={`border-t border-border even:bg-mp-cell ${saldo === 0 ? "text-muted-foreground" : ""}`}>
+      <tr
+        className={`border-t border-border ${
+          concluida
+            ? "bg-foreground/20 font-semibold text-foreground/70"
+            : "even:bg-mp-cell"
+        }`}
+      >
         <td className="px-1 py-1 text-center">
           <Button variant="ghost" size="icon" className="size-6" onClick={onToggle} aria-label="Abrir estrutura">
             {aberta ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
@@ -650,6 +702,21 @@ function FragmentoLinha({
             <Calculator className="size-4" />
           </Button>
         </td>
+        <td className="px-2 py-1 text-center">
+          <Button
+            variant={encerrada ? "default" : "outline"}
+            size="icon"
+            className="size-7"
+            onClick={onEncerrar}
+            title={
+              encerrada
+                ? "Reabrir esta linha da ordem"
+                : "Encerrar esta linha da ordem, mesmo com saldo em aberto"
+            }
+          >
+            {encerrada ? <LockOpen className="size-3.5" /> : <Lock className="size-3.5" />}
+          </Button>
+        </td>
       </tr>
       {aberta && componentes.map((componente) => (
         <tr key={componente.id} className="border-t border-border bg-muted/40 text-[11px]">
@@ -688,6 +755,7 @@ function FragmentoLinha({
             </div>
           </td>
           <td className="bg-secondary/40 px-2 py-1 text-right font-bold">{fmtInt(componente.saldo)}</td>
+          <td />
           <td />
         </tr>
       ))}

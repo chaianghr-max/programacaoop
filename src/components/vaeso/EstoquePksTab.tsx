@@ -205,6 +205,37 @@ export function EstoquePksTab({ dados, podeEditar = true }: { dados: Dados; pode
     toast.success(`${fmtInt(quantidade)} unidades de ${sku} incluídas no estoque.`);
   }
 
+  /** Remove a linha do estoque: cancela os apontamentos e apaga as baixas do SKU. */
+  async function excluirLinha(sku: string) {
+    if (!window.confirm(`Excluir a linha ${sku} do estoque? Os apontamentos e as baixas deste SKU serão removidos.`)) {
+      return;
+    }
+    const alvos = aceitas.filter((item) => normalizar(item.sku) === normalizar(sku));
+    for (const item of alvos) {
+      const { error } = await supabase.rpc("pks_estornar_entrega", { _entrega_id: item.id });
+      if (error) {
+        toast.error(`Falha ao excluir a linha: ${error.message}`);
+        return;
+      }
+    }
+    const alvoBaixas = baixas
+      .filter((item) => normalizar(item.sku) === normalizar(sku))
+      .map((item) => item.id);
+    if (alvoBaixas.length > 0) {
+      const { error } = await supabase.from("pks_estoque_baixas").delete().in("id", alvoBaixas);
+      if (error) {
+        toast.error(`Falha ao excluir a linha: ${error.message}`);
+        return;
+      }
+    }
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: ["pks-estoque-baixas"] }),
+      qc.invalidateQueries({ queryKey: ["pks-entregas", "estoque"] }),
+      qc.invalidateQueries({ queryKey: ["pks-entregas"] }),
+    ]);
+    toast.success(`Linha ${sku} removida do estoque.`);
+  }
+
   function exportarExcel() {
     const cabecalho = [
       "OC",
@@ -375,6 +406,7 @@ export function EstoquePksTab({ dados, podeEditar = true }: { dados: Dados; pode
               <th className="px-2 py-1.5 text-right uppercase">Saldo</th>
               {podeEditar && <th className="px-2 py-1.5 text-center uppercase">Ajustar saldo</th>}
               <th className="px-2 py-1.5 text-right uppercase">Pallets</th>
+              {podeEditar && <th className="w-10 px-2 py-1.5" />}
             </tr>
           </thead>
           <tbody>
@@ -413,11 +445,24 @@ export function EstoquePksTab({ dados, podeEditar = true }: { dados: Dados; pode
                   </td>
                 )}
                 <td className="px-2 py-1 text-right">{item.pallets === null ? "—" : fmt(item.pallets, 2)}</td>
+                {podeEditar && (
+                  <td className="px-2 py-1 text-right">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-7"
+                      title="Excluir esta linha do estoque"
+                      onClick={() => void excluirLinha(item.sku)}
+                    >
+                      <Trash2 className="size-4" />
+                    </Button>
+                  </td>
+                )}
               </tr>
             ))}
             {saldos.length === 0 && (
               <tr>
-                <td colSpan={podeEditar ? 10 : 9} className="px-3 py-8 text-center text-muted-foreground">
+                <td colSpan={podeEditar ? 11 : 9} className="px-3 py-8 text-center text-muted-foreground">
                   Nenhum apontamento da PKS até o momento.
                 </td>
               </tr>
@@ -435,6 +480,8 @@ export function EstoquePksTab({ dados, podeEditar = true }: { dados: Dados; pode
                 <td className="px-2 py-1.5 text-right">{fmtInt(totais.saldo)}</td>
                 {podeEditar && <td />}
                 <td className="px-2 py-1.5 text-right">{fmt(totais.pallets, 2)}</td>
+                {podeEditar && <td />}
+
 
               </tr>
             </tfoot>

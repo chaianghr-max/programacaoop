@@ -110,6 +110,26 @@ export function ProgramacaoTab({
     },
   });
 
+  const { data: linhasEncerradas = [] } = useQuery({
+    queryKey: ["ordens-linhas-encerradas"],
+    refetchInterval: 10_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("ordens_linhas_encerradas")
+        .select("ordem_id,sku,encerrada");
+      if (error) throw error;
+      return data as Array<{ ordem_id: string; sku: string; encerrada: boolean }>;
+    },
+  });
+
+  const encerradaSet = useMemo(() => {
+    const conjunto = new Set<string>();
+    for (const item of linhasEncerradas) {
+      if (item.encerrada) conjunto.add(`${item.ordem_id}|${item.sku.trim().toUpperCase()}`);
+    }
+    return conjunto;
+  }, [linhasEncerradas]);
+
   // quantidade já entregue por ordem+sku
   const entregueMap = useMemo(() => {
     const m: Record<string, number> = {};
@@ -839,7 +859,9 @@ export function ProgramacaoTab({
                   return s + qtdeEntregueItem(o.id, item.codigo, Number(item.quantidade || 0));
                 }, 0);
                 const saldo = Math.max(0, l.quantidade - entregueQtde);
-                const entregue = alvos.length > 0 && l.quantidade > 0 && saldo === 0;
+                const encerrada = alvos.some((o) => encerradaSet.has(`${o.id}|${chaveSku}`));
+                const entregue =
+                  encerrada || (alvos.length > 0 && l.quantidade > 0 && saldo === 0);
                 const parcial = entregueQtde > 0 && !entregue;
                  const pendentesDaLinha = alvos.flatMap((o) =>
                    entregasPks.filter(
@@ -856,7 +878,9 @@ export function ProgramacaoTab({
                   <tr
                     key={l.sku.id}
                     className={`border-t border-border ${
-                      entregue ? "bg-muted text-muted-foreground opacity-70" : "even:bg-mp-cell"
+                      entregue
+                        ? "bg-foreground/20 font-semibold text-foreground/70"
+                        : "even:bg-mp-cell"
                     }`}
                   >
                     <td className="px-2 py-0.5">{l.produto?.tipo ?? "?"}</td>

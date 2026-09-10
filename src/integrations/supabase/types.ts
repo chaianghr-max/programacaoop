@@ -133,6 +133,30 @@ export type Database = {
         }
         Relationships: []
       }
+      ordens_linhas_encerradas: {
+        Row: {
+          encerrada: boolean
+          ordem_id: string
+          sku: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          encerrada?: boolean
+          ordem_id: string
+          sku: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          encerrada?: boolean
+          ordem_id?: string
+          sku?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       pedidos_importados: {
         Row: {
           data: string | null
