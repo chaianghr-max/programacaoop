@@ -335,6 +335,32 @@ export function EstoquePksTab({ dados, podeEditar = true }: { dados: Dados; pode
         </div>
       </div>
 
+      {podeEditar && (
+        <div className="flex flex-wrap items-end gap-2 rounded-lg border border-border bg-card p-3">
+          <div className="text-[11px] font-semibold uppercase text-muted-foreground">
+            Incluir item avulso (sem ordem)
+          </div>
+          <Input
+            value={novoSku}
+            onChange={(evento) => setNovoSku(evento.target.value)}
+            placeholder="SKU"
+            className="h-8 w-40"
+          />
+          <Input
+            type="number"
+            value={novaQtde}
+            onChange={(evento) => setNovaQtde(evento.target.value)}
+            placeholder="Quantidade"
+            className="h-8 w-32 text-right"
+          />
+          <Button size="sm" onClick={() => void incluirItemManual()}>
+            <Plus className="mr-1 size-4" /> Incluir no estoque
+          </Button>
+        </div>
+      )}
+
+
+
       <div className="max-h-[60vh] overflow-auto rounded-lg border border-border bg-card">
         <table className="w-full min-w-[1080px] text-xs">
           <thead className="sticky top-0 z-10 bg-grid-head text-grid-head-foreground">
