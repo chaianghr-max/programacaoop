@@ -43,6 +43,13 @@
       "when": 1789067163919,
       "tag": "0005_create_pks_delivery_workflow",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1789068227054,
+      "tag": "0006_pks_estoque_e_cancelamentos",
+      "breakpoints": true
     }
   ]
 }
