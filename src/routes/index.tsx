@@ -14,6 +14,13 @@ import { SkusTab } from "@/components/vaeso/SkusTab";
 import { UsuariosTab } from "@/components/vaeso/UsuariosTab";
 import { supabase } from "@/integrations/supabase/client";
 import { useDados, useSalvar } from "@/lib/vaeso/api";
+import {
+  normalizarPermissoes,
+  permissoesDoPapel,
+  type AbaPerm,
+  type PermissoesAbas,
+} from "@/lib/vaeso/permissoes";
+
 
 export const Route = createFileRoute("/")({
   head: () => ({
