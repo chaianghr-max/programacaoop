@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, FileUp, Plus, Sheet, Trash2 } from "lucide-react";
+import { Check, FileUp, Laptop, Plus, Sheet, Smartphone, Trash2 } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -30,11 +30,22 @@ type Baixa = {
   created_at: string;
 };
 
+const PREFIXO_EXPEDICAO = "EXPEDICAO ";
+const PREFIXO_AJUSTE = "AJUSTE ";
+
 const normalizar = (valor: string) =>
   valor.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toUpperCase();
 
 const dataBr = (iso: string | null) =>
   iso ? new Date(iso).toLocaleDateString("pt-BR") : "—";
+
+const dataHoraBr = (iso: string) =>
+  new Date(iso).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+
+function usarVisualizacaoPadrao(): "celular" | "computador" {
+  if (typeof window === "undefined") return "computador";
+  return window.innerWidth < 768 ? "celular" : "computador";
+}
 
 export function EstoquePksTab({ dados, podeEditar = true }: { dados: Dados; podeEditar?: boolean }) {
   const [busca, setBusca] = useState("");
@@ -42,6 +53,7 @@ export function EstoquePksTab({ dados, podeEditar = true }: { dados: Dados; pode
   const [ajustes, setAjustes] = useState<Record<string, string>>({});
   const [novoSku, setNovoSku] = useState("");
   const [novaQtde, setNovaQtde] = useState("");
+  const [visualizacao, setVisualizacao] = useState<"celular" | "computador">(usarVisualizacaoPadrao);
   const inputRef = useRef<HTMLInputElement>(null);
   const qc = useQueryClient();
 
@@ -166,7 +178,7 @@ export function EstoquePksTab({ dados, podeEditar = true }: { dados: Dados; pode
     if (novo === null || novo === saldoAtual) return;
     const agora = new Date();
     const { error } = await supabase.from("pks_estoque_baixas").insert({
-      nf_numero: `AJUSTE ${agora.toISOString()}`,
+      nf_numero: `${PREFIXO_AJUSTE}${agora.toISOString()}`,
       nf_data: agora.toLocaleDateString("pt-BR"),
       sku,
       quantidade: saldoAtual - novo,
@@ -190,7 +202,7 @@ export function EstoquePksTab({ dados, podeEditar = true }: { dados: Dados; pode
     }
     const agora = new Date();
     const { error } = await supabase.from("pks_estoque_baixas").insert({
-      nf_numero: `AJUSTE ${agora.toISOString()}`,
+      nf_numero: `${PREFIXO_AJUSTE}${agora.toISOString()}`,
       nf_data: agora.toLocaleDateString("pt-BR"),
       sku,
       quantidade: -quantidade,
@@ -245,7 +257,7 @@ export function EstoquePksTab({ dados, podeEditar = true }: { dados: Dados; pode
       "Última produção",
       "Produzido",
       "Baixado (NF)",
-      "Saldo",
+      "Saldo de estoque",
       "Pallets",
     ];
     const linhas = saldos.map((item) => [
@@ -319,9 +331,11 @@ export function EstoquePksTab({ dados, podeEditar = true }: { dados: Dados; pode
     toast.success(`Baixas da NF ${numero} removidas.`);
   }
 
+  // Notas fiscais "de verdade" (exclui ajustes manuais e baixas de expedição).
   const notas = useMemo(() => {
     const mapa = new Map<string, { numero: string; data: string | null; itens: number; qtde: number }>();
     for (const item of baixas) {
+      if (item.nf_numero.startsWith(PREFIXO_AJUSTE) || item.nf_numero.startsWith(PREFIXO_EXPEDICAO)) continue;
       const atual = mapa.get(item.nf_numero) ?? {
         numero: item.nf_numero,
         data: item.nf_data,
@@ -335,11 +349,44 @@ export function EstoquePksTab({ dados, podeEditar = true }: { dados: Dados; pode
     return [...mapa.values()];
   }, [baixas]);
 
+  // Movimentações lançadas pela aba Expedição (PKS → Vaeso).
+  const movimentacoesExpedicao = useMemo(
+    () =>
+      baixas
+        .filter((item) => item.nf_numero.startsWith(PREFIXO_EXPEDICAO))
+        .slice(0, 30),
+    [baixas],
+  );
+
+  const celular = visualizacao === "celular";
+
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <SecaoTitulo>Estoque PKS</SecaoTitulo>
         <div className="flex flex-wrap items-center gap-2">
+          <div className="flex overflow-hidden rounded-md border border-border">
+            <button
+              type="button"
+              onClick={() => setVisualizacao("computador")}
+              className={`flex items-center gap-1 px-2 py-1 text-xs font-medium transition-colors ${
+                !celular ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:bg-secondary"
+              }`}
+              title="Visualizar como computador"
+            >
+              <Laptop className="size-3.5" /> Computador
+            </button>
+            <button
+              type="button"
+              onClick={() => setVisualizacao("celular")}
+              className={`flex items-center gap-1 px-2 py-1 text-xs font-medium transition-colors ${
+                celular ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:bg-secondary"
+              }`}
+              title="Visualizar como celular"
+            >
+              <Smartphone className="size-3.5" /> Celular
+            </button>
+          </div>
           <Input
             value={busca}
             onChange={(evento) => setBusca(evento.target.value)}
@@ -366,7 +413,7 @@ export function EstoquePksTab({ dados, podeEditar = true }: { dados: Dados; pode
         </div>
       </div>
 
-      {podeEditar && (
+      {podeEditar && !celular && (
         <div className="flex flex-wrap items-end gap-2 rounded-lg border border-border bg-card p-3">
           <div className="text-[11px] font-semibold uppercase text-muted-foreground">
             Incluir item avulso (sem ordem)
@@ -390,105 +437,181 @@ export function EstoquePksTab({ dados, podeEditar = true }: { dados: Dados; pode
         </div>
       )}
 
+      {celular ? (
+        <div className="space-y-2">
+          {saldos.map((item) => (
+            <div key={item.sku} className="rounded-xl border border-border bg-card p-3 shadow-sm">
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-bold">{item.sku}</div>
+                </div>
+                <div className="shrink-0 text-right">
+                  <div className="text-[10px] uppercase text-muted-foreground">Saldo de estoque</div>
+                  <div className="text-lg font-bold">{fmtInt(item.saldo)}</div>
+                </div>
+              </div>
+              {podeEditar && (
+                <div className="mt-2 flex items-center justify-end gap-1">
+                  <Input
+                    type="number"
+                    value={ajustes[item.sku] ?? ""}
+                    placeholder={fmtInt(item.saldo)}
+                    onChange={(evento) =>
+                      setAjustes((atual) => ({ ...atual, [item.sku]: evento.target.value }))
+                    }
+                    className="h-9 flex-1 text-right"
+                  />
+                  <Button
+                    size="icon"
+                    className="size-9 shrink-0"
+                    title="Gravar novo saldo"
+                    disabled={!ajustes[item.sku]}
+                    onClick={() => void ajustarSaldo(item.sku, item.saldo)}
+                  >
+                    <Check className="size-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-9 shrink-0"
+                    title="Excluir esta linha do estoque"
+                    onClick={() => void excluirLinha(item.sku)}
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
+                </div>
+              )}
+            </div>
+          ))}
+          {saldos.length === 0 && (
+            <div className="rounded-lg border border-border bg-card p-6 text-center text-sm text-muted-foreground">
+              Nenhum apontamento da PKS até o momento.
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="max-h-[60vh] overflow-auto rounded-lg border border-border bg-card">
+          <table className="w-full min-w-[1000px] text-xs">
+            <thead className="sticky top-0 z-10 bg-grid-head text-grid-head-foreground">
+              <tr>
+                <th className="px-2 py-1.5 text-left uppercase">Tipo</th>
+                <th className="px-2 py-1.5 text-left uppercase">SKU</th>
+                <th className="px-2 py-1.5 text-left uppercase">Descrição</th>
+                <th className="px-2 py-1.5 text-left uppercase">Última produção</th>
+                <th className="px-2 py-1.5 text-right uppercase">Produzido</th>
+                <th className="px-2 py-1.5 text-right uppercase">Baixado (NF)</th>
+                <th className="px-2 py-1.5 text-right uppercase">Saldo de estoque</th>
+                {podeEditar && <th className="px-2 py-1.5 text-center uppercase">Ajustar saldo</th>}
+                <th className="px-2 py-1.5 text-right uppercase">Pallets</th>
+                {podeEditar && <th className="w-10 px-2 py-1.5" />}
+              </tr>
+            </thead>
+            <tbody>
+              {saldos.map((item) => (
+                <tr key={item.sku} className="border-t border-border even:bg-mp-cell">
+                  <td className="px-2 py-1">{item.tipo}</td>
+                  <td className="px-2 py-1 font-semibold">{item.sku}</td>
+                  <td className="px-2 py-1">{item.descricao}</td>
+                  <td className="px-2 py-1">{dataBr(item.ultima)}</td>
+                  <td className="px-2 py-1 text-right">{fmtInt(item.produzido)}</td>
+                  <td className="px-2 py-1 text-right">{fmtInt(item.baixado)}</td>
+                  <td className="px-2 py-1 text-right font-bold">{fmtInt(item.saldo)}</td>
+                  {podeEditar && (
+                    <td className="px-2 py-1">
+                      <div className="flex items-center justify-end gap-1">
+                        <Input
+                          type="number"
+                          value={ajustes[item.sku] ?? ""}
+                          placeholder={fmtInt(item.saldo)}
+                          onChange={(evento) =>
+                            setAjustes((atual) => ({ ...atual, [item.sku]: evento.target.value }))
+                          }
+                          className="h-7 w-24 text-right"
+                        />
+                        <Button
+                          size="icon"
+                          className="size-7"
+                          title="Gravar novo saldo"
+                          disabled={!ajustes[item.sku]}
+                          onClick={() => void ajustarSaldo(item.sku, item.saldo)}
+                        >
+                          <Check className="size-4" />
+                        </Button>
+                      </div>
+                    </td>
+                  )}
+                  <td className="px-2 py-1 text-right">{item.pallets === null ? "—" : fmt(item.pallets, 2)}</td>
+                  {podeEditar && (
+                    <td className="px-2 py-1 text-right">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-7"
+                        title="Excluir esta linha do estoque"
+                        onClick={() => void excluirLinha(item.sku)}
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </td>
+                  )}
+                </tr>
+              ))}
+              {saldos.length === 0 && (
+                <tr>
+                  <td colSpan={podeEditar ? 10 : 8} className="px-3 py-8 text-center text-muted-foreground">
+                    Nenhum apontamento da PKS até o momento.
+                  </td>
+                </tr>
+              )}
+            </tbody>
 
+            {saldos.length > 0 && (
+              <tfoot className="sticky bottom-0 bg-secondary font-bold">
+                <tr className="border-t-2 border-border">
+                  <td className="px-2 py-1.5 uppercase" colSpan={4}>
+                    Total ({saldos.length} SKUs)
+                  </td>
+                  <td className="px-2 py-1.5 text-right">{fmtInt(totais.produzido)}</td>
+                  <td className="px-2 py-1.5 text-right">{fmtInt(totais.baixado)}</td>
+                  <td className="px-2 py-1.5 text-right">{fmtInt(totais.saldo)}</td>
+                  {podeEditar && <td />}
+                  <td className="px-2 py-1.5 text-right">{fmt(totais.pallets, 2)}</td>
+                  {podeEditar && <td />}
+                </tr>
+              </tfoot>
+            )}
+          </table>
+        </div>
+      )}
 
-      <div className="max-h-[60vh] overflow-auto rounded-lg border border-border bg-card">
-        <table className="w-full min-w-[1080px] text-xs">
-          <thead className="sticky top-0 z-10 bg-grid-head text-grid-head-foreground">
+      <SecaoTitulo>Movimentações de expedição (PKS → Vaeso)</SecaoTitulo>
+      <div className="overflow-auto rounded-lg border border-border bg-card">
+        <table className="w-full min-w-[420px] text-xs">
+          <thead className="bg-grid-head text-grid-head-foreground">
             <tr>
-              <th className="px-2 py-1.5 text-left uppercase">OC</th>
-              <th className="px-2 py-1.5 text-left uppercase">Tipo</th>
+              <th className="px-2 py-1.5 text-left uppercase">Data/hora</th>
               <th className="px-2 py-1.5 text-left uppercase">SKU</th>
-              <th className="px-2 py-1.5 text-left uppercase">Descrição</th>
-              <th className="px-2 py-1.5 text-left uppercase">Última produção</th>
-              <th className="px-2 py-1.5 text-right uppercase">Produzido</th>
-              <th className="px-2 py-1.5 text-right uppercase">Baixado (NF)</th>
-              <th className="px-2 py-1.5 text-right uppercase">Saldo</th>
-              {podeEditar && <th className="px-2 py-1.5 text-center uppercase">Ajustar saldo</th>}
-              <th className="px-2 py-1.5 text-right uppercase">Pallets</th>
-              {podeEditar && <th className="w-10 px-2 py-1.5" />}
+              <th className="px-2 py-1.5 text-right uppercase">Quantidade</th>
             </tr>
           </thead>
           <tbody>
-            {saldos.map((item) => (
-              <tr key={item.sku} className="border-t border-border even:bg-mp-cell">
-                <td className="px-2 py-1 font-semibold">{item.ocs || "—"}</td>
-                <td className="px-2 py-1">{item.tipo}</td>
-                <td className="px-2 py-1 font-semibold">{item.sku}</td>
-                <td className="px-2 py-1">{item.descricao}</td>
-                <td className="px-2 py-1">{dataBr(item.ultima)}</td>
-                <td className="px-2 py-1 text-right">{fmtInt(item.produzido)}</td>
-                <td className="px-2 py-1 text-right">{fmtInt(item.baixado)}</td>
-                <td className="px-2 py-1 text-right font-bold">{fmtInt(item.saldo)}</td>
-                {podeEditar && (
-                  <td className="px-2 py-1">
-                    <div className="flex items-center justify-end gap-1">
-                      <Input
-                        type="number"
-                        value={ajustes[item.sku] ?? ""}
-                        placeholder={fmtInt(item.saldo)}
-                        onChange={(evento) =>
-                          setAjustes((atual) => ({ ...atual, [item.sku]: evento.target.value }))
-                        }
-                        className="h-7 w-24 text-right"
-                      />
-                      <Button
-                        size="icon"
-                        className="size-7"
-                        title="Gravar novo saldo"
-                        disabled={!ajustes[item.sku]}
-                        onClick={() => void ajustarSaldo(item.sku, item.saldo)}
-                      >
-                        <Check className="size-4" />
-                      </Button>
-                    </div>
-                  </td>
-                )}
-                <td className="px-2 py-1 text-right">{item.pallets === null ? "—" : fmt(item.pallets, 2)}</td>
-                {podeEditar && (
-                  <td className="px-2 py-1 text-right">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="size-7"
-                      title="Excluir esta linha do estoque"
-                      onClick={() => void excluirLinha(item.sku)}
-                    >
-                      <Trash2 className="size-4" />
-                    </Button>
-                  </td>
-                )}
+            {movimentacoesExpedicao.map((mov) => (
+              <tr key={mov.id} className="border-t border-border even:bg-mp-cell">
+                <td className="px-2 py-1">{dataHoraBr(mov.created_at)}</td>
+                <td className="px-2 py-1 font-semibold">{mov.sku}</td>
+                <td className="px-2 py-1 text-right font-bold">{fmtInt(Number(mov.quantidade))}</td>
               </tr>
             ))}
-            {saldos.length === 0 && (
+            {movimentacoesExpedicao.length === 0 && (
               <tr>
-                <td colSpan={podeEditar ? 11 : 9} className="px-3 py-8 text-center text-muted-foreground">
-                  Nenhum apontamento da PKS até o momento.
+                <td colSpan={3} className="px-3 py-6 text-center text-muted-foreground">
+                  Nenhuma expedição registrada ainda.
                 </td>
               </tr>
             )}
           </tbody>
-
-          {saldos.length > 0 && (
-            <tfoot className="sticky bottom-0 bg-secondary font-bold">
-              <tr className="border-t-2 border-border">
-                <td className="px-2 py-1.5 uppercase" colSpan={5}>
-                  Total ({saldos.length} SKUs)
-                </td>
-                <td className="px-2 py-1.5 text-right">{fmtInt(totais.produzido)}</td>
-                <td className="px-2 py-1.5 text-right">{fmtInt(totais.baixado)}</td>
-                <td className="px-2 py-1.5 text-right">{fmtInt(totais.saldo)}</td>
-                {podeEditar && <td />}
-                <td className="px-2 py-1.5 text-right">{fmt(totais.pallets, 2)}</td>
-                {podeEditar && <td />}
-
-
-              </tr>
-            </tfoot>
-          )}
         </table>
       </div>
-
 
       <SecaoTitulo>Notas fiscais importadas</SecaoTitulo>
       <div className="overflow-auto rounded-lg border border-border bg-card">
