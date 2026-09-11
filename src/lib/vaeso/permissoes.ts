@@ -5,17 +5,18 @@ export const ABAS_PERM = [
   { id: "programacao", label: "Programação" },
   { id: "pks", label: "PKS" },
   { id: "estoque-pks", label: "Estoque PKS" },
+  { id: "expedicao", label: "Expedição" },
 ] as const;
-
+ 
 export type AbaPerm = (typeof ABAS_PERM)[number]["id"];
 export type Nivel = "ver" | "editar";
 export type PermissoesAbas = Record<AbaPerm, Nivel>;
-
+ 
 export type PapelBase = "admin" | "pks" | "leitura";
-
+ 
 export const ABAS_ADMIN: AbaPerm[] = ["mp", "produtos", "skus", "programacao"];
-export const ABAS_PKS: AbaPerm[] = ["pks", "estoque-pks"];
-
+export const ABAS_PKS: AbaPerm[] = ["pks", "estoque-pks", "expedicao"];
+ 
 export function permissoesDoPapel(papel: PapelBase): PermissoesAbas {
   const base = {} as PermissoesAbas;
   for (const aba of ABAS_PERM) {
@@ -24,7 +25,7 @@ export function permissoesDoPapel(papel: PapelBase): PermissoesAbas {
   }
   return base;
 }
-
+ 
 export function normalizarPermissoes(valor: unknown, papel: PapelBase): PermissoesAbas {
   const padrao = permissoesDoPapel(papel);
   if (!valor || typeof valor !== "object") return padrao;
@@ -35,7 +36,7 @@ export function normalizarPermissoes(valor: unknown, papel: PapelBase): Permisso
   }
   return resultado;
 }
-
+ 
 /** Papéis de banco derivados das permissões por aba (RLS). */
 export function papeisDasPermissoes(p: PermissoesAbas): Array<"admin" | "pks"> {
   const papeis: Array<"admin" | "pks"> = [];
@@ -43,4 +44,5 @@ export function papeisDasPermissoes(p: PermissoesAbas): Array<"admin" | "pks"> {
   else if (ABAS_PKS.some((aba) => p[aba] === "editar")) papeis.push("pks");
   return papeis;
 }
-
+ 
+ 
