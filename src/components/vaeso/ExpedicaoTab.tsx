@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronRight, Mic, MicOff, PackageCheck, Search, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Mic, MicOff, PackageCheck, Search, Trash2, Undo2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -31,7 +31,21 @@ const normalizar = (valor: string) =>
   valor.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toUpperCase();
 
 const horaBr = (iso: string) =>
-  new Date(iso).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  new Date(iso).toLocaleString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+
+const diaBr = (iso: string) => new Date(iso).toLocaleDateString("pt-BR");
+
+const diaLabel = (iso: string) => {
+  const data = new Date(iso);
+  const hoje = new Date();
+  const ontem = new Date();
+  ontem.setDate(hoje.getDate() - 1);
+  const mesmoDia = (a: Date, b: Date) =>
+    a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  if (mesmoDia(data, hoje)) return `Hoje · ${diaBr(iso)}`;
+  if (mesmoDia(data, ontem)) return `Ontem · ${diaBr(iso)}`;
+  return diaBr(iso);
+};
 
 // Números por extenso mais comuns em fala curta ("vinte", "trinta e cinco"...),
 // usados quando o reconhecimento de voz não converte automaticamente para dígitos.
@@ -118,6 +132,7 @@ export function ExpedicaoTab({ dados, podeEditar = true }: { dados: Dados; podeE
   const [enviando, setEnviando] = useState<string | null>(null);
   const [ouvindo, setOuvindo] = useState(false);
   const [ultimoComando, setUltimoComando] = useState<string | null>(null);
+  const [diaAberto, setDiaAberto] = useState<string | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const reconhecimentoRef = useRef<any>(null);
   const qc = useQueryClient();
@@ -253,13 +268,33 @@ export function ExpedicaoTab({ dados, podeEditar = true }: { dados: Dados; podeE
     return () => reconhecimentoRef.current?.stop();
   }, []);
 
-  const expedicoesHoje = useMemo(
-    () =>
-      baixas
-        .filter((b) => b.nf_numero.startsWith(PREFIXO))
-        .slice(0, 15),
-    [baixas],
-  );
+  const expedicoes = useMemo(() => baixas.filter((b) => b.nf_numero.startsWith(PREFIXO)), [baixas]);
+
+  // Última expedição de cada SKU (para o "Desfazer" rápido em cada produto).
+  const ultimaExpedicaoPorSku = useMemo(() => {
+    const mapa = new Map<string, Baixa>();
+    for (const exp of expedicoes) {
+      const chave = normalizar(exp.sku);
+      const atual = mapa.get(chave);
+      if (!atual || exp.created_at > atual.created_at) mapa.set(chave, exp);
+    }
+    return mapa;
+  }, [expedicoes]);
+
+  // Expedições agrupadas por dia, mais recente primeiro.
+  const expedicoesPorDia = useMemo(() => {
+    const mapa = new Map<string, { label: string; itens: Baixa[]; qtde: number }>();
+    for (const exp of expedicoes) {
+      const chave = diaBr(exp.created_at);
+      const atual = mapa.get(chave) ?? { label: diaLabel(exp.created_at), itens: [], qtde: 0 };
+      atual.itens.push(exp);
+      atual.qtde += Number(exp.quantidade);
+      mapa.set(chave, atual);
+    }
+    return [...mapa.entries()]
+      .map(([chave, valor]) => ({ chave, ...valor }))
+      .sort((a, b) => (a.itens[0].created_at < b.itens[0].created_at ? 1 : -1));
+  }, [expedicoes]);
 
   async function registrarExpedicao(sku: string, quantidadeVoz?: number) {
     const quantidade = quantidadeVoz ?? num(quantidades[sku]);
@@ -353,44 +388,57 @@ export function ExpedicaoTab({ dados, podeEditar = true }: { dados: Dados; podeE
       </div>
 
       <div className="space-y-2">
-        {itens.map((item) => (
-          <div
-            key={item.id}
-            className="rounded-xl border border-border bg-card p-3 shadow-sm active:scale-[0.99] transition-transform"
-          >
-            <div className="mb-2 flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <div className="truncate text-sm font-bold">{item.sku}</div>
-                <div className="truncate text-xs text-muted-foreground">{item.descricao || "—"}</div>
-              </div>
-              <div className="shrink-0 text-right">
-                <div className="text-[10px] uppercase text-muted-foreground">Saldo PKS</div>
-                <div className={`text-sm font-bold ${item.saldo < 0 ? "text-destructive" : ""}`}>
-                  {fmtInt(item.saldo)}
+        {itens.map((item) => {
+          const ultima = ultimaExpedicaoPorSku.get(normalizar(item.sku));
+          return (
+            <div
+              key={item.id}
+              className="rounded-xl border border-border bg-card p-3 shadow-sm active:scale-[0.99] transition-transform"
+            >
+              <div className="mb-2 flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-bold">{item.sku}</div>
+                  <div className="truncate text-xs text-muted-foreground">{item.descricao || "—"}</div>
+                </div>
+                <div className="shrink-0 text-right">
+                  <div className="text-[10px] uppercase text-muted-foreground">Saldo PKS</div>
+                  <div className={`text-sm font-bold ${item.saldo < 0 ? "text-destructive" : ""}`}>
+                    {fmtInt(item.saldo)}
+                  </div>
                 </div>
               </div>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  min={0}
+                  placeholder="Quantidade expedida"
+                  value={quantidades[item.sku] ?? ""}
+                  onChange={(e) => setQuantidades((atual) => ({ ...atual, [item.sku]: e.target.value }))}
+                  className="h-11 flex-1 text-right text-base"
+                />
+                <Button
+                  className="h-11 px-4"
+                  disabled={enviando === item.sku || !quantidades[item.sku]}
+                  onClick={() => void registrarExpedicao(item.sku)}
+                >
+                  {enviando === item.sku ? "..." : "Expedir"}
+                  <ChevronRight className="ml-1 size-4" />
+                </Button>
+              </div>
+              {ultima && (
+                <button
+                  type="button"
+                  onClick={() => void estornarExpedicao(ultima.id, ultima.sku)}
+                  className="mt-2 flex items-center gap-1 text-[11px] text-muted-foreground underline-offset-2 hover:text-destructive hover:underline"
+                >
+                  <Undo2 className="size-3" />
+                  Desfazer última expedição ({fmtInt(Number(ultima.quantidade))} · {horaBr(ultima.created_at)})
+                </button>
+              )}
             </div>
-            <div className="flex items-center gap-2">
-              <Input
-                type="number"
-                inputMode="decimal"
-                min={0}
-                placeholder="Quantidade expedida"
-                value={quantidades[item.sku] ?? ""}
-                onChange={(e) => setQuantidades((atual) => ({ ...atual, [item.sku]: e.target.value }))}
-                className="h-11 flex-1 text-right text-base"
-              />
-              <Button
-                className="h-11 px-4"
-                disabled={enviando === item.sku || !quantidades[item.sku]}
-                onClick={() => void registrarExpedicao(item.sku)}
-              >
-                {enviando === item.sku ? "..." : "Expedir"}
-                <ChevronRight className="ml-1 size-4" />
-              </Button>
-            </div>
-          </div>
-        ))}
+          );
+        })}
         {itens.length === 0 && (
           <div className="rounded-lg border border-border bg-card p-6 text-center text-sm text-muted-foreground">
             Nenhum produto encontrado.
@@ -398,33 +446,57 @@ export function ExpedicaoTab({ dados, podeEditar = true }: { dados: Dados; podeE
         )}
       </div>
 
-      {expedicoesHoje.length > 0 && (
+      {expedicoesPorDia.length > 0 && (
         <div className="space-y-2 pt-2">
           <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide text-primary">
             <span className="size-2 rounded-[2px] bg-primary" />
-            Últimas expedições
+            Movimentações por dia
           </div>
-          <div className="divide-y divide-border rounded-lg border border-border bg-card">
-            {expedicoesHoje.map((exp) => (
-              <div key={exp.id} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
-                <div className="min-w-0">
-                  <div className="truncate font-semibold">{exp.sku}</div>
-                  <div className="text-[11px] text-muted-foreground">{horaBr(exp.created_at)}</div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="font-bold">{fmtInt(Number(exp.quantidade))}</span>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="size-8"
-                    title="Cancelar expedição"
-                    onClick={() => void estornarExpedicao(exp.id, exp.sku)}
+          <div className="space-y-2">
+            {expedicoesPorDia.map((dia) => {
+              const aberto = diaAberto === dia.chave;
+              return (
+                <div key={dia.chave} className="overflow-hidden rounded-lg border border-border bg-card">
+                  <button
+                    type="button"
+                    onClick={() => setDiaAberto(aberto ? null : dia.chave)}
+                    className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left"
                   >
-                    <Trash2 className="size-4" />
-                  </Button>
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold">{dia.label}</div>
+                      <div className="text-[11px] text-muted-foreground">
+                        {dia.itens.length} lançamento(s) · {fmtInt(dia.qtde)} un.
+                      </div>
+                    </div>
+                    <ChevronDown className={`size-4 shrink-0 text-muted-foreground transition-transform ${aberto ? "rotate-180" : ""}`} />
+                  </button>
+                  {aberto && (
+                    <div className="divide-y divide-border border-t border-border">
+                      {dia.itens.map((exp) => (
+                        <div key={exp.id} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
+                          <div className="min-w-0">
+                            <div className="truncate font-semibold">{exp.sku}</div>
+                            <div className="text-[11px] text-muted-foreground">{horaBr(exp.created_at)}</div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold">{fmtInt(Number(exp.quantidade))}</span>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="size-8"
+                              title="Cancelar expedição"
+                              onClick={() => void estornarExpedicao(exp.id, exp.sku)}
+                            >
+                              <Trash2 className="size-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
