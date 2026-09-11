@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { LogOut, Users } from "lucide-react";
 import { toast } from "sonner";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { EstoquePksTab } from "@/components/vaeso/EstoquePksTab";
@@ -58,6 +58,11 @@ const ABAS = [
 
 type AbaId = (typeof ABAS)[number]["id"];
 
+/** Usuários que devem cair direto em uma aba específica ao entrar (comparado pelo início do e-mail). */
+const ABA_PADRAO_POR_USUARIO: Record<string, AbaId> = {
+  james: "expedicao",
+};
+
 function Painel() {
   const [pronto, setPronto] = useState(false);
   const [email, setEmail] = useState<string | null>(null);
@@ -65,6 +70,7 @@ function Painel() {
   const [papel, setPapel] = useState<"admin" | "pks" | "leitura">("leitura");
   const [permissoes, setPermissoes] = useState<PermissoesAbas>(permissoesDoPapel("leitura"));
   const [aba, setAba] = useState<AbaId>("mp");
+  const abaPadraoAplicada = useRef(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -78,6 +84,15 @@ function Painel() {
     });
     return () => sub.subscription.unsubscribe();
   }, []);
+
+  // Ao logar, alguns usuários já abrem direto numa aba específica (ex: expedição).
+  useEffect(() => {
+    if (!email || abaPadraoAplicada.current) return;
+    abaPadraoAplicada.current = true;
+    const usuario = email.split("@")[0]?.toLowerCase() ?? "";
+    const padrao = ABA_PADRAO_POR_USUARIO[usuario];
+    if (padrao) setAba(padrao);
+  }, [email]);
 
   useEffect(() => {
     if (!userId) {
@@ -190,4 +205,3 @@ function Painel() {
     </div>
   );
 }
-
