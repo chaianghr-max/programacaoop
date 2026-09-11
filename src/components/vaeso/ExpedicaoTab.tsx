@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronRight, PackageCheck, Search, Trash2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { ChevronRight, Mic, MicOff, PackageCheck, Search, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -33,11 +33,95 @@ const normalizar = (valor: string) =>
 const horaBr = (iso: string) =>
   new Date(iso).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 
+// Números por extenso mais comuns em fala curta ("vinte", "trinta e cinco"...),
+// usados quando o reconhecimento de voz não converte automaticamente para dígitos.
+const UNIDADES: Record<string, number> = {
+  zero: 0, um: 1, uma: 1, dois: 2, duas: 2, tres: 3, quatro: 4, cinco: 5,
+  seis: 6, sete: 7, oito: 8, nove: 9, dez: 10, onze: 11, doze: 12, treze: 13,
+  quatorze: 14, catorze: 14, quinze: 15, dezesseis: 16, dezessete: 17,
+  dezoito: 18, dezenove: 19, vinte: 20, trinta: 30, quarenta: 40,
+  cinquenta: 50, sessenta: 60, setenta: 70, oitenta: 80, noventa: 90,
+  cem: 100, cento: 100,
+};
+
+function palavrasParaNumero(texto: string): number | null {
+  const partes = texto.split(/\s+e\s+|\s+/).filter(Boolean);
+  let total = 0;
+  let achou = false;
+  for (const parte of partes) {
+    if (parte in UNIDADES) {
+      total += UNIDADES[parte];
+      achou = true;
+    }
+  }
+  return achou ? total : null;
+}
+
+/** Interpreta um comando falado como "SKU ABC123 quantidade vinte" ou "ABC123 20 unidades". */
+function interpretarComando(transcript: string) {
+  const bruto = transcript
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+  let skuParte = bruto;
+  let qtdeParte = "";
+
+  const marcador = bruto.match(/\b(quantidade|qtde|qtd)\b/);
+  if (marcador) {
+    skuParte = bruto.slice(0, marcador.index).trim();
+    qtdeParte = bruto.slice((marcador.index ?? 0) + marcador[0].length).trim();
+  } else {
+    const numeros = [...bruto.matchAll(/\d+/g)];
+    if (numeros.length > 0) {
+      const ultimo = numeros[numeros.length - 1];
+      skuParte = bruto.slice(0, ultimo.index).trim();
+      qtdeParte = bruto.slice(ultimo.index).trim();
+    }
+  }
+
+  skuParte = skuParte.replace(/\b(sku|codigo|produto|item)\b/g, " ").trim();
+  qtdeParte = qtdeParte.replace(/\b(unidades|unidade|pecas|peca|pcs)\b/g, " ").trim();
+
+  const numeroDigitos = qtdeParte.match(/\d+/);
+  const quantidade = numeroDigitos ? Number(numeroDigitos[0]) : palavrasParaNumero(qtdeParte);
+
+  const skuBusca = normalizar(skuParte).replace(/\s+/g, "");
+
+  return { skuBusca, quantidade: quantidade && quantidade > 0 ? quantidade : null };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type SpeechRecognitionCtor = new () => any;
+
+function obterReconhecimentoDeVoz(): SpeechRecognitionCtor | null {
+  if (typeof window === "undefined") return null;
+  const w = window as unknown as {
+    SpeechRecognition?: SpeechRecognitionCtor;
+    webkitSpeechRecognition?: SpeechRecognitionCtor;
+  };
+  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
+}
+
+function falar(texto: string) {
+  if (typeof window === "undefined" || !window.speechSynthesis) return;
+  const fala = new SpeechSynthesisUtterance(texto);
+  fala.lang = "pt-BR";
+  fala.rate = 1.1;
+  window.speechSynthesis.cancel();
+  window.speechSynthesis.speak(fala);
+}
+
 export function ExpedicaoTab({ dados, podeEditar = true }: { dados: Dados; podeEditar?: boolean }) {
   const [busca, setBusca] = useState("");
   const [quantidades, setQuantidades] = useState<Record<string, string>>({});
   const [enviando, setEnviando] = useState<string | null>(null);
+  const [ouvindo, setOuvindo] = useState(false);
+  const [ultimoComando, setUltimoComando] = useState<string | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const reconhecimentoRef = useRef<any>(null);
   const qc = useQueryClient();
+  const suportaVoz = useMemo(() => obterReconhecimentoDeVoz() !== null, []);
 
   const { data: aceitas = [] } = useQuery({
     queryKey: ["pks-entregas", "estoque"],
@@ -96,6 +180,79 @@ export function ExpedicaoTab({ dados, podeEditar = true }: { dados: Dados; podeE
     [dados.skus, saldoPorSku, termo],
   );
 
+  /** Acha o melhor SKU correspondente ao trecho falado: match exato, começa-com ou contém. */
+  function encontrarSkuPorVoz(skuBusca: string) {
+    if (!skuBusca) return { encontrado: null, ambiguo: false };
+    const candidatos = itens.filter((item) => {
+      const codigo = normalizar(item.sku).replace(/\s+/g, "");
+      return codigo === skuBusca || codigo.includes(skuBusca) || skuBusca.includes(codigo);
+    });
+    if (candidatos.length === 1) return { encontrado: candidatos[0], ambiguo: false };
+    if (candidatos.length > 1) {
+      const exato = candidatos.find((c) => normalizar(c.sku).replace(/\s+/g, "") === skuBusca);
+      if (exato) return { encontrado: exato, ambiguo: false };
+      return { encontrado: null, ambiguo: true };
+    }
+    return { encontrado: null, ambiguo: false };
+  }
+
+  async function processarComandoDeVoz(transcript: string) {
+    setUltimoComando(transcript);
+    const { skuBusca, quantidade } = interpretarComando(transcript);
+    const { encontrado, ambiguo } = encontrarSkuPorVoz(skuBusca);
+
+    if (ambiguo) {
+      toast.error(`Mais de um SKU corresponde a "${skuBusca}". Diga o código completo.`);
+      falar("Encontrei mais de um produto parecido. Diga o código completo.");
+      return;
+    }
+    if (!encontrado) {
+      toast.error(`Não encontrei nenhum SKU parecido com "${skuBusca || transcript}".`);
+      falar("Não encontrei esse produto. Pode repetir?");
+      return;
+    }
+    if (!quantidade) {
+      toast.error(`Entendi o SKU ${encontrado.sku}, mas não entendi a quantidade. Diga de novo com a quantidade.`);
+      falar(`Entendi o produto ${encontrado.sku}, mas não entendi a quantidade.`);
+      return;
+    }
+    const ok = await registrarExpedicao(encontrado.sku, quantidade);
+    if (ok) falar(`Expedido ${quantidade} de ${encontrado.sku}.`);
+  }
+
+  function alternarComandoDeVoz() {
+    if (ouvindo) {
+      reconhecimentoRef.current?.stop();
+      return;
+    }
+    const Ctor = obterReconhecimentoDeVoz();
+    if (!Ctor) {
+      toast.error("Comando de voz não é suportado neste navegador. Use o Chrome no celular.");
+      return;
+    }
+    const reconhecimento = new Ctor();
+    reconhecimento.lang = "pt-BR";
+    reconhecimento.interimResults = false;
+    reconhecimento.maxAlternatives = 1;
+    reconhecimento.continuous = false;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    reconhecimento.onresult = (evento: any) => {
+      const transcript = evento.results?.[0]?.[0]?.transcript as string | undefined;
+      if (transcript) void processarComandoDeVoz(transcript);
+    };
+    reconhecimento.onerror = () => {
+      toast.error("Não consegui ouvir. Verifique a permissão do microfone.");
+    };
+    reconhecimento.onend = () => setOuvindo(false);
+    reconhecimentoRef.current = reconhecimento;
+    setOuvindo(true);
+    reconhecimento.start();
+  }
+
+  useEffect(() => {
+    return () => reconhecimentoRef.current?.stop();
+  }, []);
+
   const expedicoesHoje = useMemo(
     () =>
       baixas
@@ -104,8 +261,8 @@ export function ExpedicaoTab({ dados, podeEditar = true }: { dados: Dados; podeE
     [baixas],
   );
 
-  async function registrarExpedicao(sku: string) {
-    const quantidade = num(quantidades[sku]);
+  async function registrarExpedicao(sku: string, quantidadeVoz?: number) {
+    const quantidade = quantidadeVoz ?? num(quantidades[sku]);
     if (!quantidade || quantidade <= 0) {
       toast.error("Informe uma quantidade válida.");
       return;
@@ -121,11 +278,12 @@ export function ExpedicaoTab({ dados, podeEditar = true }: { dados: Dados; podeE
     setEnviando(null);
     if (error) {
       toast.error(`Falha ao registrar expedição: ${error.message}`);
-      return;
+      return false;
     }
     setQuantidades((atual) => ({ ...atual, [sku]: "" }));
     await qc.invalidateQueries({ queryKey: ["pks-estoque-baixas"] });
     toast.success(`${fmtInt(quantidade)} un. de ${sku} expedidas para a Vaeso.`);
+    return true;
   }
 
   async function estornarExpedicao(id: string, sku: string) {
@@ -159,16 +317,39 @@ export function ExpedicaoTab({ dados, podeEditar = true }: { dados: Dados; podeE
             </div>
           </div>
         </div>
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={busca}
-            onChange={(e) => setBusca(e.target.value)}
-            placeholder="Buscar produto por SKU ou descrição..."
-            className="h-11 pl-9 text-base"
-            inputMode="search"
-          />
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={busca}
+              onChange={(e) => setBusca(e.target.value)}
+              placeholder="Buscar produto por SKU ou descrição..."
+              className="h-11 pl-9 text-base"
+              inputMode="search"
+            />
+          </div>
+          {suportaVoz && (
+            <Button
+              type="button"
+              size="icon"
+              className={`h-11 w-11 shrink-0 ${ouvindo ? "animate-pulse bg-destructive hover:bg-destructive" : ""}`}
+              title={ouvindo ? "Parar comando de voz" : "Falar código e quantidade"}
+              onClick={alternarComandoDeVoz}
+            >
+              {ouvindo ? <MicOff className="size-5" /> : <Mic className="size-5" />}
+            </Button>
+          )}
         </div>
+        {ouvindo && (
+          <div className="rounded-md bg-primary/10 px-3 py-1.5 text-center text-xs font-medium text-primary">
+            Ouvindo... diga o código e a quantidade, ex: "1234 vinte unidades"
+          </div>
+        )}
+        {!ouvindo && ultimoComando && (
+          <div className="truncate rounded-md bg-muted px-3 py-1 text-center text-[11px] text-muted-foreground">
+            Último comando: "{ultimoComando}"
+          </div>
+        )}
       </div>
 
       <div className="space-y-2">
@@ -250,4 +431,3 @@ export function ExpedicaoTab({ dados, podeEditar = true }: { dados: Dados; podeE
     </div>
   );
 }
-
